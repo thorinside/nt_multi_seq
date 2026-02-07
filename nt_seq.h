@@ -178,8 +178,9 @@ struct NtSeq : public _NT_algorithm {
     int8_t focusChannel;  // -1 = overview, 0-3 = focused channel
 
     // Engine memory pool (engines placed here via placement new)
-    // SomaEngine ~860 bytes, AeSequencerEngine ~880 bytes, Thorp ~2KB
-    uint8_t enginePool[kMaxChannels * 2048];
+    // Must be aligned for ARM strd instructions used by engine constructors.
+    // Each slot is 2048 bytes; 2048 is a multiple of 8, so all slots stay aligned.
+    alignas(8) uint8_t enginePool[kMaxChannels * 2048];
 };
 
 #endif // NT_SEQ_H

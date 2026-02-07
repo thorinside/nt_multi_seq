@@ -6,6 +6,17 @@
 #include <new>
 #include <string.h>
 
+// Compile-time guards: each engine must fit in a 2048-byte slot and
+// must not require alignment stricter than the pool provides (8 bytes).
+static_assert(sizeof(SomaEngine) <= 2048, "SomaEngine exceeds pool slot");
+static_assert(sizeof(AeSequencerEngine) <= 2048, "AeSequencerEngine exceeds pool slot");
+static_assert(sizeof(SeqMarkovEngine) <= 2048, "SeqMarkovEngine exceeds pool slot");
+static_assert(sizeof(ThorpEngine) <= 2048, "ThorpEngine exceeds pool slot");
+static_assert(alignof(SomaEngine) <= 8, "SomaEngine alignment exceeds pool");
+static_assert(alignof(AeSequencerEngine) <= 8, "AeSequencerEngine alignment exceeds pool");
+static_assert(alignof(SeqMarkovEngine) <= 8, "SeqMarkovEngine alignment exceeds pool");
+static_assert(alignof(ThorpEngine) <= 8, "ThorpEngine alignment exceeds pool");
+
 // Per-channel common parameters (static definitions as templates)
 static const _NT_parameter channelCommonParams[] = {
     { .name = "Engine", .min = 0, .max = kNumEngineTypes - 1, .def = kEngineSoma, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = engineTypeStrings },
@@ -206,19 +217,21 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
 
     // Gray out MIDI params initially (CV mode default) and unused engine slots
     int algIdx = NT_algorithmIndex(static_cast<const _NT_algorithm*>(alg));
-    for (int ch = 0; ch < (int)numChannels; ++ch) {
-        int base = alg->channels[ch].paramBase;
-        // Gray out MIDI params when in CV mode (default)
-        NT_setParameterGrayedOut(algIdx, base + kChMidiChannel, true);
-        NT_setParameterGrayedOut(algIdx, base + kChMidiDest, true);
+    if (algIdx >= 0) {
+        for (int ch = 0; ch < (int)numChannels; ++ch) {
+            int base = alg->channels[ch].paramBase;
+            // Gray out MIDI params when in CV mode (default)
+            NT_setParameterGrayedOut(algIdx, base + kChMidiChannel, true);
+            NT_setParameterGrayedOut(algIdx, base + kChMidiDest, true);
 
-        // Gray out unused engine param slots
-        int numEngDefs = 0;
-        _NT_parameter tempDefs[kMaxEngineParams];
-        if (alg->channels[ch].engine)
-            numEngDefs = alg->channels[ch].engine->getParameterDefs(tempDefs);
-        for (int i = numEngDefs; i < kMaxEngineParams; ++i)
-            NT_setParameterGrayedOut(algIdx, alg->channels[ch].engineParamBase + i, true);
+            // Gray out unused engine param slots
+            int numEngDefs = 0;
+            _NT_parameter tempDefs[kMaxEngineParams];
+            if (alg->channels[ch].engine)
+                numEngDefs = alg->channels[ch].engine->getParameterDefs(tempDefs);
+            for (int i = numEngDefs; i < kMaxEngineParams; ++i)
+                NT_setParameterGrayedOut(algIdx, alg->channels[ch].engineParamBase + i, true);
+        }
     }
 
     return static_cast<_NT_algorithm*>(alg);
