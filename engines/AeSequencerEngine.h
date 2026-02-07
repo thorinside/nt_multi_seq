@@ -1,0 +1,78 @@
+#ifndef AE_SEQUENCER_ENGINE_H
+#define AE_SEQUENCER_ENGINE_H
+
+#include "SequencerEngine.h"
+
+class AeSequencerEngine : public SequencerEngine {
+public:
+    AeSequencerEngine();
+
+    void init(uint32_t sampleRate) override;
+    EngineOutput clockTick(const ScaleQuantizer* scale) override;
+    void reset() override;
+    void parameterChanged(int localIndex, int16_t value) override;
+    int getParameterDefs(_NT_parameter* defs) const override;
+    int getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const override;
+    const char* name() const override { return "AE Seq"; }
+    int currentStep() const override;
+    int sequenceLength() const override;
+    int getStatusText(char* buf, int maxLen) const override;
+
+    enum Param {
+        kAeCvSeq = 0,
+        kAeGateSeq,
+        kAeCvSteps,
+        kAeMinCv,
+        kAeMaxCv,
+        kAePolarity,
+        kAeBitDepth,
+        kAeGateSteps,
+        kAeThreshold,
+        kNumAeParams
+    };
+
+    enum Polarity {
+        kPolarityPositive = 0,
+        kPolarityBipolar,
+        kPolarityNegative,
+        kNumPolarities
+    };
+
+private:
+    static constexpr int kNumSequences = 8;
+    static constexpr int kMaxSteps = 32;
+
+    // Parameters
+    int cvSeq_;       // 0-7
+    int gateSeq_;     // 0-7
+    int cvSteps_;     // 1-32
+    int minCv_;       // -100 to 100 (decivolts)
+    int maxCv_;       // -100 to 100
+    int polarity_;    // 0=Positive, 1=Bipolar, 2=Negative
+    int bitDepth_;    // 2-16
+    int gateSteps_;   // 1-32
+    int threshold_;   // 1-100
+
+    struct VoltageSequence {
+        int16_t steps[kMaxSteps];
+        int currentStep;
+    };
+
+    struct GateSequence {
+        uint8_t steps[kMaxSteps];
+        int currentStep;
+    };
+
+    VoltageSequence voltSeqs_[kNumSequences];
+    GateSequence gateSeqs_[kNumSequences];
+
+    // PRNG
+    uint32_t rngState_;
+    uint32_t rng();
+
+    void getEffectiveRange(float& effMin, float& effMax) const;
+    float mapRawToVoltage(int16_t raw, float effMin, float effMax) const;
+    float quantizeVoltage(float value, float effMin, float effMax) const;
+};
+
+#endif // AE_SEQUENCER_ENGINE_H
