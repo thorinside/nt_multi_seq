@@ -48,6 +48,7 @@ private:
     // Probability weights for scale degrees (max 128 degrees)
     float probabilities_[128];
     int numDegrees_;
+    bool scaleLoaded_; // true once we've initialized patterns with a real scale
 
     // Simple PRNG state (xorshift32)
     uint32_t rngState_;

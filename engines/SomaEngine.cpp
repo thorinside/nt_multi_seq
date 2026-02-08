@@ -8,6 +8,7 @@ SomaEngine::SomaEngine()
     , length_(8)
     , currentStep_(0)
     , numDegrees_(7)
+    , scaleLoaded_(false)
     , rngState_(12345)
 {
     for (int i = 0; i < kMaxSteps; ++i) {
@@ -103,14 +104,12 @@ EngineOutput SomaEngine::clockTick(const ScaleQuantizer* scale)
     if (length < 1) length = 1;
     if (length > kMaxSteps) length = kMaxSteps;
 
-    // Recompute probabilities if scale changed
-    if (scale && scale->isLoaded() && (int)scale->numNotes() != numDegrees_) {
-        initializePatterns(scale, length);
-    }
-
-    // Initialize on first tick if needed
-    if (numDegrees_ <= 0) {
-        initializePatterns(scale, length);
+    // Reinitialize patterns when scale first becomes available or note count changes
+    if (scale && scale->isLoaded()) {
+        if (!scaleLoaded_ || (int)scale->numNotes() != numDegrees_) {
+            initializePatterns(scale, length);
+            scaleLoaded_ = true;
+        }
     }
 
     // Advance step

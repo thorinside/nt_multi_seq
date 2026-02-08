@@ -1,6 +1,8 @@
 #include "nt_seq.h"
 #include <string.h>
 
+void parameterChanged(_NT_algorithm* self, int p);
+
 // Edge detection helpers
 static inline bool risingEdge(float sample, bool& state)
 {
@@ -28,19 +30,16 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
             int numScl = NT_getNumScl();
             if (numScl > 0) {
                 alg->paramDefs[kParamScaleFile].max = numScl - 1;
-                NT_updateParameterDefinition(NT_algorithmIndex(self), kParamScaleFile);
+                int algIdx = NT_algorithmIndex(self);
+                if (algIdx >= 0)
+                    NT_updateParameterDefinition(algIdx, kParamScaleFile);
             }
-            if (!alg->awaitingCallback) {
-                alg->sclRequest.index = alg->v[kParamScaleFile];
-                alg->awaitingCallback = true;
-                if (!NT_readScl(alg->sclRequest))
-                    alg->awaitingCallback = false;
-            }
+            parameterChanged(self, kParamScaleFile);
         }
     }
 
     // --- Check if scale was loaded (callback completed) ---
-    if (alg->scaleDirty && alg->sclRequest.numNotes > 0) {
+    if (alg->scaleDirty && !alg->sclRequest.error && alg->sclRequest.numNotes > 0) {
         alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
         alg->scaleDirty = false;
     }
@@ -67,8 +66,8 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
         chBus[ch].clock = busPtr(busFrames, alg->v[base + kChClockIn], numFrames);
         chBus[ch].reset = busPtr(busFrames, alg->v[base + kChResetIn], numFrames);
 
-        int outputMode = alg->v[base + kChOutputMode];
-        chBus[ch].isCvMode = (outputMode == kOutputCV);
+        int outputMode = alg->v[base + kChRouting];
+        chBus[ch].isCvMode = (outputMode == kRoutingCV);
 
         if (chBus[ch].isCvMode) {
             chBus[ch].pitch = busPtr(busFrames, alg->v[base + kChCvOut], numFrames);

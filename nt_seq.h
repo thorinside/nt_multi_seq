@@ -41,7 +41,7 @@ enum ChannelParamOffset {
     kChEngineType = 0,
     kChClockIn,
     kChResetIn,
-    kChOutputMode,
+    kChRouting,
     kChCvOut,
     kChCvOutMode,
     kChGateOut,
@@ -63,10 +63,10 @@ enum EngineType {
 };
 
 // --- Output mode enum ---
-enum OutputMode {
-    kOutputCV = 0,
-    kOutputMIDI,
-    kNumOutputModes
+enum Routing {
+    kRoutingCV = 0,
+    kRoutingMIDI,
+    kNumRoutings
 };
 
 // --- MIDI destination enum ---
@@ -93,7 +93,7 @@ static const char* const engineTypeStrings[] = {
     "Thorp", "Soma", "AE Seq", "Markov", nullptr
 };
 
-static const char* const outputModeStrings[] = {
+static const char* const routingStrings[] = {
     "CV", "MIDI", nullptr
 };
 
@@ -118,6 +118,7 @@ struct ChannelState {
     bool midiNoteOn;
     int paramBase;           // Index of first per-channel param in v[]
     int engineParamBase;     // Index of first engine param in v[]
+    int enginePageIndex;     // Index into pageDefs[] for engine page
 
     // Per-channel clock/reset edge detection
     bool clockHigh;
@@ -135,6 +136,7 @@ struct ChannelState {
         , midiNoteOn(false)
         , paramBase(0)
         , engineParamBase(0)
+        , enginePageIndex(0)
         , clockHigh(false)
         , resetHigh(false)
         , cachedPitch(0.0f)
