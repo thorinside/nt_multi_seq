@@ -200,9 +200,9 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
 
         // Per-channel CV output defaults:
         // ch0: gate=14 pitch=15 vel=16, ch1: 17/18/19, etc.
-        alg->paramDefs[p + kChGateOut].def = 14 + ch * 3;
-        alg->paramDefs[p + kChCvOut].def = 15 + ch * 3;
-        alg->paramDefs[p + kChVelOut].def = 16 + ch * 3;
+        alg->paramDefs[p + kChGateOut].def = 15 + ch * 3;
+        alg->paramDefs[p + kChCvOut].def = 16 + ch * 3;
+        alg->paramDefs[p + kChVelOut].def = 17 + ch * 3;
 
         p += kNumChannelCommonParams;
 

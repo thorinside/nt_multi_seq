@@ -496,13 +496,12 @@ bool draw(_NT_algorithm* self)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
 
-    if (alg->focusChannel >= 0 && alg->focusChannel < (int8_t)alg->numChannels) {
+    if (alg->focusChannel >= 0 && alg->focusChannel < (int8_t)alg->numChannels)
         drawFocus(alg, alg->focusChannel);
-        return true;  // Suppress parameter line, claim full display
-    } else {
+    else
         drawOverview(alg);
-        return false;  // Keep parameter line visible
-    }
+
+    return true;
 }
 
 // --- Custom UI: right encoder button cycles focus ---
