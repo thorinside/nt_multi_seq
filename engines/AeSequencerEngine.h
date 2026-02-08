@@ -28,6 +28,7 @@ public:
         kAeBitDepth,
         kAeGateSteps,
         kAeThreshold,
+        kAeVelocity,
         kNumAeParams
     };
 
@@ -52,6 +53,7 @@ private:
     int bitDepth_;    // 2-16
     int gateSteps_;   // 1-32
     int threshold_;   // 1-100
+    int velocity_;    // 0-100
 
     struct VoltageSequence {
         int16_t steps[kMaxSteps];

@@ -14,6 +14,7 @@ AeSequencerEngine::AeSequencerEngine()
     , bitDepth_(16)
     , gateSteps_(16)
     , threshold_(50)
+    , velocity_(100)
     , rngState_(54321)
 {
 }
@@ -129,6 +130,7 @@ EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* /*scale*/)
     if (midiNote < 0) midiNote = 0;
     if (midiNote > 127) midiNote = 127;
     out.midiNote = (uint8_t)midiNote;
+    out.velocity = (float)velocity_ * 0.05f; // 0-100% -> 0-5V
 
     return out;
 }
@@ -161,6 +163,7 @@ void AeSequencerEngine::parameterChanged(int localIndex, int16_t value)
     case kAeBitDepth:   bitDepth_ = value;   break;
     case kAeGateSteps:  gateSteps_ = value;  break;
     case kAeThreshold:  threshold_ = value;  break;
+    case kAeVelocity:   velocity_ = value;   break;
     }
 }
 
@@ -175,6 +178,7 @@ int AeSequencerEngine::getParameterDefs(_NT_parameter* defs) const
     defs[kAeBitDepth]  = { .name = "Bit Depth", .min = 2,    .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kAeGateSteps] = { .name = "Gate Steps", .min = 1,   .max = kMaxSteps,     .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kAeThreshold] = { .name = "Threshold", .min = 1,    .max = 100,           .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kAeVelocity]  = { .name = "Velocity",  .min = 0,    .max = 100,           .def = 100,.unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     return kNumAeParams;
 }
 

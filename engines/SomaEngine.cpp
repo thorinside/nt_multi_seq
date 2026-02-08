@@ -6,6 +6,7 @@ SomaEngine::SomaEngine()
     , noteMutate_(70)
     , gateMutate_(80)
     , length_(8)
+    , velocity_(100)
     , currentStep_(0)
     , numDegrees_(7)
     , scaleLoaded_(false)
@@ -154,7 +155,7 @@ EngineOutput SomaEngine::clockTick(const ScaleQuantizer* scale)
         out.midiNote = (uint8_t)(60 + scaleDegree + octaveOffset * 12);
     }
 
-    out.velocity = 5.0f; // Full velocity
+    out.velocity = (float)velocity_ * 0.05f; // 0-100% -> 0-5V
 
     return out;
 }
@@ -179,6 +180,9 @@ void SomaEngine::parameterChanged(int localIndex, int16_t value)
     case kSomaLength:
         length_ = value;
         break;
+    case kSomaVelocity:
+        velocity_ = value;
+        break;
     }
 }
 
@@ -188,6 +192,7 @@ int SomaEngine::getParameterDefs(_NT_parameter* defs) const
     defs[kSomaNoteMutate]   = { .name = "Note Mutate", .min = 0, .max = 100, .def = 70, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
     defs[kSomaGateMutate]   = { .name = "Gate Mutate", .min = 0, .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
     defs[kSomaLength]       = { .name = "Length", .min = 1, .max = 64, .def = 8, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr };
+    defs[kSomaVelocity]     = { .name = "Velocity", .min = 0, .max = 100, .def = 100, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
     return kNumSomaParams;
 }
 

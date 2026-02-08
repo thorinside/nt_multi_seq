@@ -24,6 +24,7 @@ public:
         kSomaNoteMutate,
         kSomaGateMutate,
         kSomaLength,
+        kSomaVelocity,
         kNumSomaParams
     };
 
@@ -39,6 +40,7 @@ private:
     int noteMutate_;     // 0-100
     int gateMutate_;     // 0-100
     int length_;         // 1-64
+    int velocity_;       // 0-100
 
     // Sequence state
     int currentStep_;

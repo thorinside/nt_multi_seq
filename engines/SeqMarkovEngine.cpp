@@ -35,6 +35,7 @@ SeqMarkovEngine::SeqMarkovEngine()
     , mutation_(20)
     , length_(16)
     , density_(60)
+    , velocity_(100)
     , currentStep_(0)
     , lastDegree_(0)
     , numDegrees_(7)
@@ -275,7 +276,7 @@ EngineOutput SeqMarkovEngine::clockTick(const ScaleQuantizer* scale)
     out.gate = step.active ? 5.0f : 0.0f;
 
     // Velocity (step.velocity is 0-127, map to 0-5V)
-    out.velocity = (float)step.velocity / 25.4f;
+    out.velocity = ((float)step.velocity / 25.4f) * ((float)velocity_ / 100.0f);
 
     // Pitch
     int deg = step.scaleDegree;
@@ -309,6 +310,7 @@ void SeqMarkovEngine::parameterChanged(int localIndex, int16_t value)
     case kMarkovMutation:  mutation_ = value; break;
     case kMarkovLength:    length_ = value; break;
     case kMarkovDensity:   density_ = value; break;
+    case kMarkovVelocity:  velocity_ = value; break;
     }
 }
 
@@ -321,6 +323,7 @@ int SeqMarkovEngine::getParameterDefs(_NT_parameter* defs) const
     defs[kMarkovMutation]  = { .name = "Mutation",  .min = 0, .max = 100,            .def = 20,          .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kMarkovLength]    = { .name = "Length",    .min = 1, .max = kMaxSteps,       .def = 16,          .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kMarkovDensity]   = { .name = "Density",   .min = 1, .max = 100,            .def = 60,          .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kMarkovVelocity]  = { .name = "Velocity",  .min = 0, .max = 100,            .def = 100,         .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     return kNumMarkovParams;
 }
 

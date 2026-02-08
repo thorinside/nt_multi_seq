@@ -26,6 +26,7 @@ public:
         kMarkovMutation,
         kMarkovLength,
         kMarkovDensity,
+        kMarkovVelocity,
         kNumMarkovParams
     };
 
@@ -64,6 +65,7 @@ private:
     int mutation_;    // 0-100
     int length_;      // 1-32
     int density_;     // 1-100
+    int velocity_;    // 0-100
 
     // Sequence state
     struct Step {
