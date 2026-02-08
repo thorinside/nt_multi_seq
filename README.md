@@ -9,10 +9,71 @@ Each channel runs an independent sequencer engine, selected at instantiation tim
 | Spec Value | Engine | Description |
 |:---:|--------|-------------|
 | 0 | None | Channel skipped |
-| 1 | Thorp | Pattern arpeggiator with 23 note patterns, 15 velocity patterns, chain sequencing, and song/jam modes |
-| 2 | Soma | Mutating step sequencer with note and gate mutation probabilities |
-| 3 | AE Seq | Analog-style CV/gate sequencer with independent CV and gate sequence selection, bit depth control |
-| 4 | Markov | Markov chain melodic generator with 8 behavioral styles and semantic matrix generation |
+| 1 | [Thorp](docs/thorp.md) | Pattern arpeggiator with 23 note patterns, 15 velocity patterns, chain sequencing, and song/jam modes |
+| 2 | [Soma](docs/soma.md) | Mutating step sequencer with note and gate mutation probabilities |
+| 3 | [AE Seq](docs/ae-seq.md) | Analog-style CV/gate sequencer with independent CV and gate sequence selection, bit depth control |
+| 4 | [Markov](docs/markov.md) | Markov chain melodic generator with 8 behavioral styles and semantic matrix generation |
+
+## Display and Focus UI
+
+The plugin has two display modes: **Overview** and **Focus**.
+
+### Overview Mode
+
+The default view shows all active channels at a glance. Each channel row displays:
+- Channel number (spec slot)
+- Engine name and status text
+- Step position bar (thin horizontal bar with moving playhead)
+- Current pitch (note name when scale is on, voltage when off)
+- Gate indicator (solid block when gate is high)
+
+The top bar shows "Multi Seq", the current root note/octave, and the loaded scale file name with its note count.
+
+Press **[R] encoder button** or **Pot C button** to enter focus mode on the first channel.
+
+### Focus Mode
+
+Focus mode dedicates the full display to one channel with detailed real-time feedback:
+
+- **Line 1**: Channel number, engine name, and scale info (root note, scale file, note count)
+- **Line 2**: Step bar with per-step segments (or AE Seq's CV-level/gate visualization) plus step counter
+- **Line 3**: Current note, gate state (ON/OFF), and velocity voltage
+- **Lines 4-5**: Engine-specific parameter readout (varies by engine -- see individual engine docs)
+- **Below separator**: Compact summary of all other active channels
+
+Pressing **Pot C button** cycles through channels. Pressing **[R] encoder button** also cycles (except when focused on Markov, where it's used for regeneration). Cycling past the last channel returns to overview mode.
+
+Each engine claims different hardware controls in focus mode for hands-on performance. See the individual engine docs for details: [Thorp](docs/thorp.md), [AE Seq](docs/ae-seq.md), [Markov](docs/markov.md). Soma has no custom focus controls.
+
+## Global Parameters
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| Root Note | C-B | C | Root note for scale quantization |
+| Octave | 0-8 | 4 | Base octave |
+| Scale File | (file picker) | - | `.scl` microtuning file from SD card |
+
+## Per-Channel Routing Parameters
+
+Every channel has these common parameters regardless of engine type:
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| Clock In | CV input | - | Clock source for this channel |
+| Reset In | CV input | - | Reset source for this channel |
+| Routing | CV / MIDI | CV | Output mode |
+| Pitch Out | CV output | - | Pitch CV bus assignment |
+| Pitch mode | Add / Replace | - | How pitch CV is written to the bus |
+| Gate Out | CV output | - | Gate CV bus assignment |
+| Gate mode | Add / Replace | - | How gate CV is written to the bus |
+| Velocity Out | CV output | - | Velocity CV bus assignment |
+| Velocity mode | Add / Replace | - | How velocity CV is written to the bus |
+| MIDI Ch | 1-16 | 1 | MIDI output channel (when routing = MIDI) |
+| MIDI Dest | Breakout / Sel.Bus / USB / Internal | Breakout | MIDI output destination |
+| Clock Div | 1-16 | 1 | Clock divider |
+| Scale On | Off / On | On | Whether scale quantization is applied |
+| Note Gate In | CV input | - | Gate input for note capture (Thorp) |
+| Note CV In | CV input | - | V/Oct input for note capture (Thorp) |
 
 ## Architecture
 
