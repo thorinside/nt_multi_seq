@@ -10,14 +10,14 @@
 #include "clock/ClockProcessor.h"
 
 // Maximum channels supported
-constexpr int kMaxChannels = 4;
+constexpr int kMaxChannels = 8;
 
-// Maximum parameters per engine (pre-allocated slots)
-constexpr int kMaxEngineParams = 15;
+// Maximum parameters any single engine can define
+constexpr int kMaxEngineParams = 32;
 
-// Maximum total parameters
-// Global(3) + per-channel(16 common + 15 engine) * 4 = 127
-constexpr int kMaxTotalParams = 3 + kMaxChannels * (16 + kMaxEngineParams);
+// Maximum total parameters (upper bound for array sizing)
+// Global(3) + per-channel(15 common + up to 32 engine) * 8 = 379
+constexpr int kMaxTotalParams = 3 + kMaxChannels * (15 + kMaxEngineParams);
 
 // Maximum pages: 1 global + 2 per channel (common + engine)
 constexpr int kMaxPages = 1 + kMaxChannels * 2;
@@ -38,8 +38,7 @@ enum GlobalParam {
 
 // --- Per-channel common parameter offsets ---
 enum ChannelParamOffset {
-    kChEngineType = 0,
-    kChClockIn,
+    kChClockIn = 0,
     kChResetIn,
     kChRouting,
     kChCvOut,
@@ -83,13 +82,28 @@ enum MidiDest {
 };
 
 // --- Specification ---
+// Spec value: 0=None, 1=Thorp, 2=Soma, 3=AE Seq, 4=Markov
 enum SpecIndex {
-    SPEC_CHANNELS = 0,
+    SPEC_SEQ1 = 0,
+    SPEC_SEQ2,
+    SPEC_SEQ3,
+    SPEC_SEQ4,
+    SPEC_SEQ5,
+    SPEC_SEQ6,
+    SPEC_SEQ7,
+    SPEC_SEQ8,
     NUM_SPECS
 };
 
 static const _NT_specification specifications[] = {
-    { .name = "Channels", .min = 1, .max = kMaxChannels, .def = 2, .type = kNT_typeGeneric },
+    { .name = "Seq 1", .min = 0, .max = kNumEngineTypes, .def = 2, .type = kNT_typeGeneric },
+    { .name = "Seq 2", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Seq 3", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Seq 4", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Seq 5", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Seq 6", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Seq 7", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Seq 8", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
 };
 
 // --- Enum string arrays ---
@@ -126,7 +140,9 @@ struct ChannelState {
     bool midiNoteOn;
     int paramBase;           // Index of first per-channel param in v[]
     int engineParamBase;     // Index of first engine param in v[]
+    int numEngineParams;     // Actual number of engine params (no padding)
     int enginePageIndex;     // Index into pageDefs[] for engine page
+    int specSlot;            // Maps dense channel index back to spec slot 0-7
 
     // Per-channel clock/reset edge detection
     bool clockHigh;
@@ -148,7 +164,9 @@ struct ChannelState {
         , midiNoteOn(false)
         , paramBase(0)
         , engineParamBase(0)
+        , numEngineParams(0)
         , enginePageIndex(0)
+        , specSlot(0)
         , clockHigh(false)
         , resetHigh(false)
         , noteGateHigh(false)
@@ -182,6 +200,9 @@ struct NtSeq : public _NT_algorithm {
     // Channel states
     ChannelState channels[kMaxChannels];
 
+    // Dynamic page name buffers (2 pages per channel, 24 chars each)
+    char pageNameBufs[kMaxChannels * 2][24];
+
     // Scale system
     ScaleQuantizer scaleQuantizer;
     _NT_sclRequest sclRequest;
@@ -193,7 +214,7 @@ struct NtSeq : public _NT_algorithm {
     bool scaleDirty;
 
     // UI state
-    int8_t focusChannel;  // -1 = overview, 0-3 = focused channel
+    int8_t focusChannel;  // -1 = overview, 0-7 = focused channel
 
     // Engine memory pool (engines placed here via placement new)
     // Must be aligned for ARM strd instructions used by engine constructors.

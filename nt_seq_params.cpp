@@ -1,22 +1,10 @@
 #include "nt_seq.h"
-#include "engines/SomaEngine.h"
-#include "engines/AeSequencerEngine.h"
-#include "engines/SeqMarkovEngine.h"
-#include "engines/ThorpEngine.h"
 #include <string.h>
-#include <new>
 
 // Root note names for parameterString
 static const char* rootNoteNames[] = {
     "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
 };
-
-static inline int16_t clampParamValue(int16_t v, int16_t minV, int16_t maxV)
-{
-    if (v < minV) return minV;
-    if (v > maxV) return maxV;
-    return v;
-}
 
 static void applyRoutingGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
 {
@@ -32,17 +20,6 @@ static void applyRoutingGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChVelOutMode) + paramOffset, !isCv);
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiChannel) + paramOffset, isCv);
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiDest) + paramOffset, isCv);
-}
-
-static void applyEngineSlotGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
-{
-    if (algIdx < 0 || !alg->channels[ch].engine) return;
-    int engBase = alg->channels[ch].engineParamBase;
-    uint32_t paramOffset = NT_parameterOffset();
-    _NT_parameter tempDefs[kMaxEngineParams];
-    int numActive = alg->channels[ch].engine->getParameterDefs(tempDefs);
-    for (int i = 0; i < kMaxEngineParams; ++i)
-        NT_setParameterGrayedOut(algIdx, (uint32_t)(engBase + i) + paramOffset, i >= numActive);
 }
 
 void parameterChanged(_NT_algorithm* self, int p)
@@ -67,7 +44,7 @@ void parameterChanged(_NT_algorithm* self, int p)
         int engBase = alg->channels[ch].engineParamBase;
 
         // Is this param in this channel's range?
-        if (p < base || p >= engBase + kMaxEngineParams) continue;
+        if (p < base || p >= engBase + alg->channels[ch].numEngineParams) continue;
 
         int localOffset = p - base;
 
@@ -83,86 +60,16 @@ void parameterChanged(_NT_algorithm* self, int p)
             return;
         }
 
-        // Engine type changed (or init replay after extractParameters wiped grayouts)
-        if (localOffset == kChEngineType) {
-            EngineType newType = (EngineType)alg->v[p];
-            if (newType != alg->channels[ch].engineType) {
-                // Destroy old engine (call destructor)
-                if (alg->channels[ch].engine) {
-                    alg->channels[ch].engine->~SequencerEngine();
-                }
-
-                // Create new engine in same memory
-                uint8_t* engineMem = alg->enginePool + ch * 2048;
-                switch (newType) {
-                case kEngineSoma:
-                    alg->channels[ch].engine = new (engineMem) SomaEngine();
-                    break;
-                case kEngineAeSeq:
-                    alg->channels[ch].engine = new (engineMem) AeSequencerEngine();
-                    break;
-                case kEngineSeqMarkov:
-                    alg->channels[ch].engine = new (engineMem) SeqMarkovEngine();
-                    break;
-                case kEngineThorp:
-                    alg->channels[ch].engine = new (engineMem) ThorpEngine();
-                    break;
-                default:
-                    alg->channels[ch].engine = new (engineMem) SomaEngine();
-                    break;
-                }
-                alg->channels[ch].engine->init(alg->sampleRate);
-                alg->channels[ch].engineType = newType;
-
-                // Update engine parameter definitions
-                _NT_parameter engineDefs[kMaxEngineParams];
-                int numEngDefs = alg->channels[ch].engine->getParameterDefs(engineDefs);
-
-                // Initialize the new engine from its own defaults.
-                // Do this directly to avoid re-entrant parameter writes from
-                // within parameterChanged(), which can destabilize the host.
-                for (int i = 0; i < numEngDefs; ++i) {
-                    int16_t defVal = clampParamValue(
-                        (int16_t)engineDefs[i].def,
-                        (int16_t)engineDefs[i].min,
-                        (int16_t)engineDefs[i].max);
-                    alg->channels[ch].engine->parameterChanged(i, defVal);
-                }
-
-                for (int i = 0; i < kMaxEngineParams; ++i) {
-                    if (i < numEngDefs) {
-                        alg->paramDefs[engBase + i] = engineDefs[i];
-                    } else {
-                        alg->paramDefs[engBase + i] = { .name = "-", .min = 0, .max = 0, .def = 0, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr };
-                    }
-                    if (algIdx >= 0)
-                        NT_updateParameterDefinition(algIdx, engBase + i);
-                }
-
-                int epi = alg->channels[ch].enginePageIndex;
-                uint8_t* engPageIdx = const_cast<uint8_t*>(alg->pageDefs[epi].params);
-                _NT_parameterPage tmpPage;
-                (void)alg->channels[ch].engine->getPageDefs(
-                    &tmpPage, engPageIdx, engBase);
-                alg->pageDefs[epi].numParams = (uint8_t)kMaxEngineParams;
-            }
-
-            // Always apply routing+engine slot grayouts — construct grayouts get
-            // wiped by the emulator's extractParameters/clearParameters cycle,
-            // and this handler is guaranteed to run during init parameter replay.
-            applyRoutingGrayouts(alg, algIdx, ch);
-            applyEngineSlotGrayouts(alg, algIdx, ch);
-            return;
-        }
-
         // Engine-specific parameter
-        if (p >= engBase && p < engBase + kMaxEngineParams) {
+        if (p >= engBase) {
             int localEngIdx = p - engBase;
             if (alg->channels[ch].engine)
                 alg->channels[ch].engine->parameterChanged(localEngIdx, alg->v[p]);
             return;
         }
 
+        // Keep grayouts synchronized during host init replay.
+        applyRoutingGrayouts(alg, algIdx, ch);
         return; // Handled
     }
 }
@@ -178,9 +85,9 @@ int parameterUiPrefix(_NT_algorithm* self, int p, char* buff)
     // Find which channel this param belongs to
     for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
         int base = alg->channels[ch].paramBase;
-        int end = alg->channels[ch].engineParamBase + kMaxEngineParams;
+        int end = alg->channels[ch].engineParamBase + alg->channels[ch].numEngineParams;
         if (p >= base && p < end) {
-            int len = NT_intToString(buff, ch + 1);
+            int len = NT_intToString(buff, alg->channels[ch].specSlot + 1);
             buff[len++] = ':';
             buff[len] = 0;
             return len;

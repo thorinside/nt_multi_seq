@@ -22,7 +22,7 @@ int parameterString(_NT_algorithm* self, int p, int v, char* buff);
 static const _NT_factory factory = {
     .guid = NT_MULTICHAR('T', 'h', 'M', 's'),
     .name = "nt_multi_seq",
-    .description = "Multi-channel sequencer with selectable engines and .scl microtuning",
+    .description = "Multi-channel sequencer (specs: 0=None 1=Thorp 2=Soma 3=AE 4=Markov)",
     .numSpecifications = ARRAY_SIZE(specifications),
     .specifications = specifications,
     .calculateStaticRequirements = nullptr,

@@ -64,7 +64,7 @@ PLUGINS_DIR = plugins
 BUILD_DIR = build
 
 # Targets
-.PHONY: all hardware test clean
+.PHONY: all hardware test unit-test clean
 
 all: hardware test
 
@@ -108,6 +108,13 @@ $(PLUGINS_DIR):
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
+
+# Unit test target - standalone spec logic tests (no NT API dependency)
+unit-test: $(BUILD_DIR)/test_spec_logic
+	./$(BUILD_DIR)/test_spec_logic
+
+$(BUILD_DIR)/test_spec_logic: tests/test_spec_logic.cpp spec_helpers.h | $(BUILD_DIR)
+	$(CXX_TEST) -std=c++11 -Wall -Wextra -Wno-unused-parameter -I. tests/test_spec_logic.cpp -o $@
 
 # Clean build artifacts
 clean:

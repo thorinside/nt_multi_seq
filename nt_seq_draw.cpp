@@ -150,8 +150,8 @@ static void drawOverview(NtSeq* alg)
         int base = alg->channels[ch].paramBase;
         scaleEnabled = alg->v[base + kChScaleEnable] != 0;
 
-        // Channel number
-        NT_intToString(buf, ch + 1);
+        // Channel number (spec slot, not dense index)
+        NT_intToString(buf, alg->channels[ch].specSlot + 1);
         NT_drawText(0, y, buf, 15, kNT_textLeft, kNT_textTiny);
 
         // Engine name
@@ -384,7 +384,7 @@ static void drawFocus(NtSeq* alg, int focusCh)
     // --- Line 1 (y=0): "Ch 2: Soma" + scale info ---
     int len = 0;
     const char* s = "Ch "; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, focusCh + 1);
+    len += NT_intToString(buf + len, alg->channels[focusCh].specSlot + 1);
     buf[len++] = ':';
     buf[len++] = ' ';
     if (eng) {
@@ -472,7 +472,7 @@ static void drawFocus(NtSeq* alg, int focusCh)
         bool chScaleEn = alg->v[chBase + kChScaleEnable] != 0;
 
         len = 0;
-        len += NT_intToString(buf + len, ch + 1);
+        len += NT_intToString(buf + len, alg->channels[ch].specSlot + 1);
         buf[len++] = ':';
         if (alg->channels[ch].engine) {
             s = alg->channels[ch].engine->name();
