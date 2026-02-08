@@ -281,10 +281,9 @@ void midiMessage(_NT_algorithm* self, uint8_t byte0, uint8_t byte1, uint8_t byte
     for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
         if (!alg->channels[ch].engine)
             continue;
-        int base = alg->channels[ch].paramBase;
-        int configuredCh = alg->v[base + kChMidiChannel];
-        if (configuredCh != (int)midiCh)
-            continue;
+        int engineMidiCh = alg->channels[ch].engine->midiInputChannel();
+        if (engineMidiCh < 0) continue;
+        if (engineMidiCh > 0 && engineMidiCh != (int)midiCh) continue;
 
         if (isNoteOn)
             alg->channels[ch].engine->noteOn(note, velocity);

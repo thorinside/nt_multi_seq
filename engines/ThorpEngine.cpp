@@ -105,6 +105,7 @@ ThorpEngine::ThorpEngine()
     , gateLen_(50)
     , playMode_(kPlayJam)
     , chainLen_(1)
+    , midiInCh_(0)
     , currentStep_(-1)
     , pingDir_(1)
     , velocityStepCount_(0)
@@ -529,6 +530,10 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
             editChainPos_ = chainLen_ - 1;
         break;
 
+    case kThorpMidiInCh:
+        midiInCh_ = clampInt(value, 0, 16);
+        break;
+
     default:
         break;
     }
@@ -632,6 +637,7 @@ int ThorpEngine::getParameterDefs(_NT_parameter* defs) const
     defs[kThorpGateLen]        = { .name = "Gate Len",   .min = 1, .max = 100,                 .def = 50,       .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kThorpPlayMode]       = { .name = "Play Mode",  .min = 0, .max = kNumPlayModes - 1,   .def = kPlayJam, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPlayModeStrings };
     defs[kThorpChainLen]       = { .name = "Chain Len",  .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpMidiInCh]       = { .name = "MIDI In Ch", .min = 0, .max = 16,                  .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr }; // 0=Omni, 1-16=channel
     return kNumThorpParams;
 }
 
@@ -662,6 +668,11 @@ int ThorpEngine::getStatusText(char* buf, int maxLen) const
     if (len < maxLen - 2) len += NT_intToString(buf + len, arpSlot_);
     buf[len] = 0;
     return len;
+}
+
+int ThorpEngine::midiInputChannel() const
+{
+    return midiInCh_;  // 0=omni, 1-16=specific channel
 }
 
 int ThorpEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const

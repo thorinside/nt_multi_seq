@@ -40,6 +40,9 @@ public:
     virtual void noteOff(uint8_t /*midiNote*/) {}
     virtual void noteCvGate(float /*vOct*/, bool /*rising*/) {}
 
+    // MIDI input channel. -1=no MIDI input (default), 0=omni, 1-16=specific channel.
+    virtual int midiInputChannel() const { return -1; }
+
     // Optional timed-gate behavior. Engines returning true can request that
     // the host hold gate high for a percentage of measured clock period.
     virtual bool usesTimedGate() const { return false; }

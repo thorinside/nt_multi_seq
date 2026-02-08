@@ -22,6 +22,7 @@ public:
     void noteCvGate(float vOct, bool rising) override;
     bool usesTimedGate() const override { return true; }
     int gateLengthPercent() const override { return gateLen_; }
+    int midiInputChannel() const override;
     // Focus-page song editing helpers.
     void uiSetChainLength(int len);
     void uiSetChainPos(int pos);
@@ -48,6 +49,7 @@ public:
         kThorpGateLen,
         kThorpPlayMode,
         kThorpChainLen,
+        kThorpMidiInCh,
         kNumThorpParams
     };
 
@@ -97,6 +99,7 @@ private:
     int gateLen_;
     int playMode_;
     int chainLen_;
+    int midiInCh_;
 
     // Playback state
     int currentStep_;

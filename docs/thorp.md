@@ -26,6 +26,7 @@ Notes are captured from MIDI or CV input. The first key press after all keys are
 | Gate Len | 1-100% | 50% | Gate length as a percentage of clock period |
 | Play Mode | Jam/Song | Jam | Jam plays one slot; Song chains multiple slots |
 | Chain Len | 1-16 | 1 | Number of slots in the song chain |
+| MIDI In Ch | 0-16 | 0 (Omni) | MIDI input channel for note capture (0=Omni, 1-16=channel) |
 
 ## Note Patterns (23)
 

@@ -23,22 +23,25 @@ static_assert(ThorpEngine::kNumThorpParams <= kMaxEngineParams, "ThorpEngine has
 static_assert(ARRAY_SIZE(specifications) == kMaxChannels, "specifications array must match kMaxChannels");
 
 // Per-channel common parameters (static definitions as templates)
+// Max bus index — NT_PARAMETER_IO hardcodes 28; override to match current AUX bus count.
+static constexpr int kMaxBus = 64;
+
 static const _NT_parameter channelCommonParams[] = {
-    NT_PARAMETER_CV_INPUT( "Clock In", 0, 1 )
-    NT_PARAMETER_CV_INPUT( "Reset In", 0, 2 )
-    { .name = "Routing", .min = 0, .max = kNumRoutings - 1, .def = kRoutingCV, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = routingStrings },
-    NT_PARAMETER_CV_OUTPUT( "Pitch Out", 1, 15 )
-    NT_PARAMETER_OUTPUT_MODE( "Pitch mode" )
-    NT_PARAMETER_CV_OUTPUT( "Gate Out", 1, 14 )
-    NT_PARAMETER_OUTPUT_MODE( "Gate mode" )
-    NT_PARAMETER_CV_OUTPUT( "Velocity Out", 1, 16 )
-    NT_PARAMETER_OUTPUT_MODE( "Velocity mode" )
-    { .name = "MIDI Ch", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
-    { .name = "MIDI Dest", .min = 0, .max = kNumMidiDests - 1, .def = kMidiDestBreakout, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = midiDestStrings },
-    { .name = "Clock Div", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
-    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = offOnStrings },
-    NT_PARAMETER_CV_INPUT( "Note Gate In", 0, 3 )
-    NT_PARAMETER_CV_INPUT( "Note CV In", 0, 4 )
+    { .name = "Clock In",     .min = 0, .max = kMaxBus, .def = 1,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
+    { .name = "Reset In",     .min = 0, .max = kMaxBus, .def = 2,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
+    { .name = "Routing",      .min = 0, .max = kNumRoutings - 1, .def = kRoutingCV, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = routingStrings },
+    { .name = "Gate Out",     .min = 0, .max = kMaxBus, .def = 14, .unit = kNT_unitCvOutput,   .scaling = 0, .enumStrings = nullptr },
+    { .name = "Gate mode",    .min = 0, .max = 1,       .def = 0,  .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Pitch Out",    .min = 0, .max = kMaxBus, .def = 15, .unit = kNT_unitCvOutput,   .scaling = 0, .enumStrings = nullptr },
+    { .name = "Pitch mode",   .min = 0, .max = 1,       .def = 0,  .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Velocity Out", .min = 0, .max = kMaxBus, .def = 16, .unit = kNT_unitCvOutput,   .scaling = 0, .enumStrings = nullptr },
+    { .name = "Velocity mode",.min = 0, .max = 1,       .def = 0,  .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
+    { .name = "MIDI Ch",      .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
+    { .name = "MIDI Dest",    .min = 0, .max = kNumMidiDests - 1, .def = kMidiDestBreakout, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = midiDestStrings },
+    { .name = "Clock Div",    .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Scale On",     .min = 0, .max = 1,  .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = offOnStrings },
+    { .name = "Note Gate In", .min = 0, .max = kMaxBus, .def = 3,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
+    { .name = "Note CV In",   .min = 0, .max = kMaxBus, .def = 4,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
 };
 static_assert(sizeof(channelCommonParams) / sizeof(channelCommonParams[0]) == kNumChannelCommonParams, "Channel param count mismatch");
 
@@ -201,7 +204,7 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         // Per-channel CV output defaults:
         // ch0: gate=14 pitch=15 vel=16, ch1: 17/18/19, etc.
         alg->paramDefs[p + kChGateOut].def = 15 + ch * 3;
-        alg->paramDefs[p + kChCvOut].def = 16 + ch * 3;
+        alg->paramDefs[p + kChCvOut].def  = 16 + ch * 3;
         alg->paramDefs[p + kChVelOut].def = 17 + ch * 3;
 
         p += kNumChannelCommonParams;
