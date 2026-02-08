@@ -43,7 +43,7 @@ Focus mode dedicates the full display to one channel with detailed real-time fee
 
 Pressing **Pot C button** cycles through channels. Pressing **[R] encoder button** also cycles (except when focused on Markov, where it's used for regeneration). Cycling past the last channel returns to overview mode.
 
-Each engine claims different hardware controls in focus mode for hands-on performance. See the individual engine docs for details: [Thorp](docs/thorp.md), [AE Seq](docs/ae-seq.md), [Markov](docs/markov.md). Soma has no custom focus controls.
+Each engine claims different hardware controls in focus mode for hands-on performance. See the individual engine docs for details: [Thorp](docs/thorp.md), [Soma](docs/soma.md), [AE Seq](docs/ae-seq.md), [Markov](docs/markov.md).
 
 ## Global Parameters
 
@@ -52,6 +52,8 @@ Each engine claims different hardware controls in focus mode for hands-on perfor
 | Root Note | C-B | C | Root note for scale quantization |
 | Octave | 0-8 | 4 | Base octave |
 | Scale File | (file picker) | - | `.scl` microtuning file from SD card |
+| Note Weight | Major / Harmonic / Equal | Major | How Soma weights scale degrees when mutating (see [Soma docs](docs/soma.md)) |
+| Warp Amount | 0-100% | 0% | Post-quantization bias toward characteristic (non-diatonic) notes. Higher values shift more notes toward spicy scale degrees. Has no effect when Note Weight is Equal. |
 
 ## Per-Channel Routing Parameters
 
@@ -111,12 +113,6 @@ make unit-test
 make all
 ```
 
-### Deploy to nt_emu
-
-```bash
-cp plugins/nt_seq.dylib ~/nosuch/nt_emu/vcv-plugin/plugins/
-```
-
 ## Project Structure
 
 ```
@@ -139,6 +135,7 @@ clock/
   ClockProcessor.cpp/h    Clock divider
 tests/
   test_spec_logic.cpp     Unit tests for spec-to-engine mapping and page naming
+  test_scale_quantizer.cpp  Unit tests for scale degree weighting modes
 ```
 
 ## Compile-Time Safety

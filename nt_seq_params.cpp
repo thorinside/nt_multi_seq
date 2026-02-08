@@ -27,6 +27,16 @@ void parameterChanged(_NT_algorithm* self, int p)
     NtSeq* alg = static_cast<NtSeq*>(self);
     int algIdx = NT_algorithmIndex(static_cast<const _NT_algorithm*>(self));
 
+    // Note weight mode changed — propagate to all engines
+    if (p == kParamNoteWeight) {
+        int mode = alg->v[kParamNoteWeight];
+        for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
+            if (alg->channels[ch].engine)
+                alg->channels[ch].engine->setWeightMode(mode);
+        }
+        return;
+    }
+
     // Scale file changed
     if (p == kParamScaleFile) {
         if (!alg->awaitingCallback) {

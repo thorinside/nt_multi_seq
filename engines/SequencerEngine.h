@@ -15,6 +15,7 @@ struct EngineOutput {
 
 class SequencerEngine {
 public:
+    SequencerEngine() : weightMode_(0) {}
     virtual ~SequencerEngine() {}
     virtual void init(uint32_t sampleRate) = 0;
     virtual EngineOutput clockTick(const ScaleQuantizer* scale) = 0;
@@ -43,6 +44,13 @@ public:
     // the host hold gate high for a percentage of measured clock period.
     virtual bool usesTimedGate() const { return false; }
     virtual int gateLengthPercent() const { return 100; }
+
+    // Note weight mode (0=Major, 1=Harmonic, 2=Equal). Set by host.
+    void setWeightMode(int m) { weightMode_ = m; }
+    int weightMode() const { return weightMode_; }
+
+protected:
+    int weightMode_;
 };
 
 #endif // SEQUENCER_ENGINE_H

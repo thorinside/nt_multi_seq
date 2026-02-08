@@ -16,8 +16,8 @@ constexpr int kMaxChannels = 8;
 constexpr int kMaxEngineParams = 32;
 
 // Maximum total parameters (upper bound for array sizing)
-// Global(3) + per-channel(15 common + up to 32 engine) * 8 = 379
-constexpr int kMaxTotalParams = 3 + kMaxChannels * (15 + kMaxEngineParams);
+// Global(5) + per-channel(15 common + up to 32 engine) * 8 = 381
+constexpr int kMaxTotalParams = 5 + kMaxChannels * (15 + kMaxEngineParams);
 
 // Maximum pages: 1 global + 2 per channel (common + engine)
 constexpr int kMaxPages = 1 + kMaxChannels * 2;
@@ -33,6 +33,8 @@ enum GlobalParam {
     kParamRootNote = 0,
     kParamOctave,
     kParamScaleFile,
+    kParamNoteWeight,   // 0=Major, 1=Harmonic, 2=Equal
+    kParamWarpAmount,   // 0-100%, post-quantization bias toward characteristic notes
     kNumGlobalParams
 };
 

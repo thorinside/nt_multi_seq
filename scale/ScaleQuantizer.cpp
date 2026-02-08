@@ -131,3 +131,187 @@ uint8_t ScaleQuantizer::scaleDegreeToMidi(int scaleDegree, int octave, int root)
     if (midiNote > 127) midiNote = 127;
     return (uint8_t)midiNote;
 }
+
+double ScaleQuantizer::degreeRatio(int degree) const
+{
+    if (degree <= 0) return 1.0;
+    if (degree > (int)numNotes_) degree = (int)numNotes_;
+    return ratios_[degree - 1];
+}
+
+float ScaleQuantizer::degreeCents(int degree) const
+{
+    if (degree <= 0) return 0.0f;
+    return (float)(log2_impl(degreeRatio(degree)) * 1200.0);
+}
+
+float ScaleQuantizer::periodCents() const
+{
+    if (numNotes_ == 0) return 1200.0f;
+    return (float)(log2_impl(ratios_[numNotes_ - 1]) * 1200.0);
+}
+
+bool ScaleQuantizer::isOctaveBased() const
+{
+    float pc = periodCents();
+    return pc >= 1150.0f && pc <= 1250.0f;
+}
+
+void ScaleQuantizer::computeNoteWeights(float* weights, int numDegrees, WeightMode mode) const
+{
+    computeNoteWeights(weights, numDegrees, mode, 3.0f);
+}
+
+void ScaleQuantizer::computeNoteWeights(float* weights, int numDegrees, WeightMode mode, float charWeight) const
+{
+    if (mode == kWeightEqual || numDegrees <= 0) {
+        for (int i = 0; i < numDegrees; ++i)
+            weights[i] = 1.0f;
+        return;
+    }
+
+    if (mode == kWeightMajor) {
+        if (!isOctaveBased()) {
+            // Non-octave scales: fall through to equal
+            for (int i = 0; i < numDegrees; ++i)
+                weights[i] = 1.0f;
+            return;
+        }
+        // Major scale semitone set
+        static const int majorSemitones[] = { 0, 2, 4, 5, 7, 9, 11 };
+        for (int i = 0; i < numDegrees; ++i) {
+            float cents = degreeCents(i);
+            // Round to nearest semitone mod 12
+            int semitone = ((int)(cents / 100.0f + 0.5f)) % 12;
+            if (semitone < 0) semitone += 12;
+            bool isMajor = false;
+            for (int m = 0; m < 7; ++m) {
+                if (semitone == majorSemitones[m]) {
+                    isMajor = true;
+                    break;
+                }
+            }
+            weights[i] = isMajor ? 1.0f : charWeight;
+        }
+        return;
+    }
+
+    if (mode == kWeightHarmonic) {
+        // For each degree, find the nearest simple fraction p/q (p >= q, p,q in [1,12])
+        // and check if it's within 20 cents and p*q <= 18 (consonant)
+        for (int i = 0; i < numDegrees; ++i) {
+            double r = degreeRatio(i);
+            double bestDist = 1e10;
+            int bestPQ = 999;
+            // Search all fractions p/q where p >= q, p,q in [1,12]
+            for (int q = 1; q <= 12; ++q) {
+                for (int p = q; p <= 12; ++p) {
+                    double frac = (double)p / (double)q;
+                    double distCents = fabs(log2_impl(r / frac) * 1200.0);
+                    if (distCents < bestDist) {
+                        bestDist = distCents;
+                        bestPQ = p * q;
+                    }
+                }
+            }
+            bool consonant = (bestDist <= 20.0 && bestPQ <= 18);
+            weights[i] = consonant ? 1.0f : charWeight;
+        }
+        return;
+    }
+
+    // Fallback
+    for (int i = 0; i < numDegrees; ++i)
+        weights[i] = 1.0f;
+}
+
+int ScaleQuantizer::findNearestDegree(float vOct, int& outOctave) const
+{
+    if (numNotes_ == 0) {
+        // Fallback: 12-TET, degree = semitone within octave
+        int semitone = (int)(vOct * 12.0f + 0.5f);
+        outOctave = 0;
+        if (semitone < 0) {
+            outOctave = -((-semitone + 11) / 12);
+            semitone = semitone % 12;
+            if (semitone < 0) semitone += 12;
+        } else if (semitone >= 12) {
+            outOctave = semitone / 12;
+            semitone = semitone % 12;
+        }
+        return semitone;
+    }
+
+    int period = (int)numNotes_;
+    double periodRatio = ratios_[period - 1];
+    double logPeriod = log2_impl(periodRatio);
+
+    // Convert V/oct to ratio (root=0 assumed, so vOct is pure pitch)
+    double ratio = pow(2.0, (double)vOct);
+
+    // Normalize ratio into one period, tracking octave offset
+    outOctave = 0;
+    if (ratio < 1.0) {
+        while (ratio < 1.0) {
+            ratio *= periodRatio;
+            outOctave--;
+        }
+    } else if (ratio >= periodRatio) {
+        while (ratio >= periodRatio) {
+            ratio /= periodRatio;
+            outOctave++;
+        }
+    }
+
+    // Search all degrees for closest match in log space
+    int bestDegree = 0;
+    double bestDist = 1e10;
+    for (int d = 0; d < period; ++d) {
+        double r = (d == 0) ? 1.0 : ratios_[d - 1];
+        double dist = fabs(log2_impl(ratio) - log2_impl(r));
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestDegree = d;
+        }
+    }
+
+    // Also check the period boundary (degree 0 of next period)
+    double distToPeriod = fabs(log2_impl(ratio) - logPeriod);
+    if (distToPeriod < bestDist) {
+        bestDegree = 0;
+        outOctave++;
+    }
+
+    return bestDegree;
+}
+
+int ScaleQuantizer::warpDegree(int degree, WeightMode mode, int warpAmount) const
+{
+    if (warpAmount <= 0) return degree;
+    if (numNotes_ == 0) return degree;
+
+    int nd = (int)numNotes_;
+
+    // Compute weights with custom characteristic weight
+    float charWeight = 1.0f + (float)warpAmount / 100.0f * 4.0f;
+    float weights[128];
+    computeNoteWeights(weights, nd, mode, charWeight);
+
+    // Build cumulative weight table
+    float cumulative[128];
+    cumulative[0] = weights[0];
+    for (int i = 1; i < nd; ++i)
+        cumulative[i] = cumulative[i - 1] + weights[i];
+    float totalWeight = cumulative[nd - 1];
+
+    // Map degree to position in weighted space
+    float pos = ((float)degree + 0.5f) / (float)nd * totalWeight;
+
+    // Find which zone pos falls in
+    for (int i = 0; i < nd; ++i) {
+        if (pos <= cumulative[i])
+            return i;
+    }
+
+    return nd - 1;
+}

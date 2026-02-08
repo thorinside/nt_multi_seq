@@ -2,6 +2,7 @@
 #define SOMA_ENGINE_H
 
 #include "SequencerEngine.h"
+#include "../scale/ScaleQuantizer.h"
 
 class SomaEngine : public SequencerEngine {
 public:

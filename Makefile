@@ -110,11 +110,15 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 # Unit test target - standalone spec logic tests (no NT API dependency)
-unit-test: $(BUILD_DIR)/test_spec_logic
+unit-test: $(BUILD_DIR)/test_spec_logic $(BUILD_DIR)/test_scale_quantizer
 	./$(BUILD_DIR)/test_spec_logic
+	./$(BUILD_DIR)/test_scale_quantizer
 
 $(BUILD_DIR)/test_spec_logic: tests/test_spec_logic.cpp spec_helpers.h | $(BUILD_DIR)
 	$(CXX_TEST) -std=c++11 -Wall -Wextra -Wno-unused-parameter -I. tests/test_spec_logic.cpp -o $@
+
+$(BUILD_DIR)/test_scale_quantizer: tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) -std=c++11 -Wall -Wextra -Wno-unused-parameter -I. -I$(DISTINGNT_API)/include tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp -lm -o $@
 
 # Clean build artifacts
 clean:

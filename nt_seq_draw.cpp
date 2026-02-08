@@ -2,6 +2,7 @@
 #include "engines/ThorpEngine.h"
 #include "engines/AeSequencerEngine.h"
 #include "engines/SeqMarkovEngine.h"
+#include "engines/SomaEngine.h"
 #include <string.h>
 
 static const char* rootNoteNames[] = {
@@ -519,6 +520,9 @@ uint32_t hasCustomUi(_NT_algorithm* self)
     } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineAeSeq) {
         controls |= kNT_encoderL | kNT_encoderR;
         controls |= kNT_potL | kNT_potC | kNT_potR;
+    } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineSoma) {
+        controls |= kNT_encoderL | kNT_encoderR;
+        controls |= kNT_potL | kNT_potC | kNT_potR;
     } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineSeqMarkov) {
         controls |= kNT_potButtonL | kNT_potButtonR;
     }
@@ -599,6 +603,48 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
             if (v < 0) v = 0;
             if (v > 100) v = 100;
             NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeVelocity) + paramOffset, (int16_t)v);
+        }
+        return;
+    }
+
+    // Soma focus controls:
+    // Pot L: Note Mutate (0-100)
+    // Pot C: Gate Mutate (0-100)
+    // Pot R: Oct Spread (0-100)
+    // Encoder L: Length (1-64)
+    // Encoder R: Velocity (0-100)
+    if (alg->channels[focus].engineType == kEngineSoma && alg->channels[focus].engine) {
+        int engBase = alg->channels[focus].engineParamBase;
+
+        if (data.controls & kNT_potL) {
+            int v = (int)(data.pots[0] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SomaEngine::kSomaNoteMutate) + paramOffset, (int16_t)v);
+        }
+        if (data.controls & kNT_potC) {
+            int v = (int)(data.pots[1] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SomaEngine::kSomaGateMutate) + paramOffset, (int16_t)v);
+        }
+        if (data.controls & kNT_potR) {
+            int v = (int)(data.pots[2] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SomaEngine::kSomaOctaveSpread) + paramOffset, (int16_t)v);
+        }
+        if (data.encoders[0] != 0) {
+            int v = alg->v[engBase + SomaEngine::kSomaLength] + data.encoders[0];
+            if (v < 1) v = 1;
+            if (v > 64) v = 64;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SomaEngine::kSomaLength) + paramOffset, (int16_t)v);
+        }
+        if (data.encoders[1] != 0) {
+            int v = alg->v[engBase + SomaEngine::kSomaVelocity] + data.encoders[1];
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SomaEngine::kSomaVelocity) + paramOffset, (int16_t)v);
         }
         return;
     }

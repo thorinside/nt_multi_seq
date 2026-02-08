@@ -42,11 +42,18 @@ static const _NT_parameter channelCommonParams[] = {
 };
 static_assert(sizeof(channelCommonParams) / sizeof(channelCommonParams[0]) == kNumChannelCommonParams, "Channel param count mismatch");
 
+// Note weight mode strings
+static const char* const noteWeightStrings[] = {
+    "Major", "Harmonic", "Equal", nullptr
+};
+
 // Global parameters (static definitions as templates)
 static const _NT_parameter globalParams[] = {
     { .name = "Root Note", .min = 0, .max = 11, .def = 0, .unit = kNT_unitHasStrings, .scaling = 0, .enumStrings = nullptr },
     { .name = "Octave", .min = 0, .max = 8, .def = 4, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
     { .name = "Scale File", .min = 0, .max = 32767, .def = 0, .unit = kNT_unitConfirm, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Note Weight", .min = 0, .max = 2, .def = 0, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = noteWeightStrings },
+    { .name = "Warp Amount", .min = 0, .max = 100, .def = 0, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
 };
 static_assert(sizeof(globalParams) / sizeof(globalParams[0]) == kNumGlobalParams, "Global param count mismatch");
 

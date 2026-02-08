@@ -49,38 +49,23 @@ void SomaEngine::init(uint32_t sampleRate)
 
 void SomaEngine::computeProbabilities(const ScaleQuantizer* scale)
 {
-    if (!scale || !scale->isLoaded()) {
-        // Default: equal probability across 7 degrees
-        numDegrees_ = 7;
+    numDegrees_ = scale && scale->isLoaded() ? (int)scale->numNotes() : 7;
+    if (numDegrees_ <= 0) numDegrees_ = 7;
+
+    if (scale && scale->isLoaded()) {
+        scale->computeNoteWeights(probabilities_, numDegrees_,
+            (ScaleQuantizer::WeightMode)weightMode_);
+    } else {
         for (int i = 0; i < numDegrees_; ++i)
-            probabilities_[i] = 1.0f / (float)numDegrees_;
-        return;
+            probabilities_[i] = 1.0f;
     }
 
-    numDegrees_ = (int)scale->numNotes();
-    if (numDegrees_ <= 0) {
-        numDegrees_ = 7;
-        for (int i = 0; i < numDegrees_; ++i)
-            probabilities_[i] = 1.0f / (float)numDegrees_;
-        return;
-    }
-
-    // Weight: give "characteristic" degrees (those not in the major scale)
-    // a higher probability. Since we're using .scl files (arbitrary tunings),
-    // we just use uniform weighting. The Lua Soma weighted against major scale
-    // degrees but that concept doesn't map well to arbitrary .scl tunings.
-    // Instead: slight bias toward middle degrees (creates more interesting patterns)
+    // Normalize to probabilities
     float total = 0.0f;
-    for (int i = 0; i < numDegrees_; ++i) {
-        // Gentle bell curve: center degrees slightly more likely
-        float center = (float)(numDegrees_ - 1) / 2.0f;
-        float dist = (float)i - center;
-        float w = 1.0f + 0.5f * (1.0f - (dist * dist) / (center * center + 1.0f));
-        probabilities_[i] = w;
-        total += w;
+    for (int i = 0; i < numDegrees_; ++i) total += probabilities_[i];
+    if (total > 0.0f) {
+        for (int i = 0; i < numDegrees_; ++i) probabilities_[i] /= total;
     }
-    for (int i = 0; i < numDegrees_; ++i)
-        probabilities_[i] /= total;
 }
 
 int SomaEngine::weightedPick(int numDegrees)

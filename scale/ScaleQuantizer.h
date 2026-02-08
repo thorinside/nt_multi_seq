@@ -27,6 +27,29 @@ public:
     uint32_t numNotes() const { return numNotes_; }
     bool isLoaded() const { return numNotes_ > 0; }
 
+    // Cents and ratio accessors for note weight computation
+    float degreeCents(int degree) const;
+    float periodCents() const;
+    bool isOctaveBased() const;
+    double degreeRatio(int degree) const;
+
+    // Note weight modes
+    enum WeightMode { kWeightMajor = 0, kWeightHarmonic, kWeightEqual };
+
+    // Fills weights[] for each scale degree. Caller normalizes to probabilities.
+    void computeNoteWeights(float* weights, int numDegrees, WeightMode mode) const;
+
+    // Overload: use a custom characteristic weight instead of the default 3.0
+    void computeNoteWeights(float* weights, int numDegrees, WeightMode mode, float charWeight) const;
+
+    // Find the nearest scale degree for a V/oct pitch (root=0 assumed).
+    // Returns degree (0..numNotes-1) and sets outOctave to the period offset.
+    int findNearestDegree(float vOct, int& outOctave) const;
+
+    // Warp a degree through weighted space. Returns the warped degree.
+    // warpAmount: 0-100 (0=identity, 100=maximum warp toward characteristic notes)
+    int warpDegree(int degree, WeightMode mode, int warpAmount) const;
+
 private:
     // Convert a single _NT_sclNote to a ratio (relative to 1/1)
     double noteToRatio(const _NT_sclNote& note) const;

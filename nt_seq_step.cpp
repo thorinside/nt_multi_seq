@@ -150,6 +150,19 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                     ? &alg->scaleQuantizer : nullptr;
                 EngineOutput eo = alg->channels[ch].engine->clockTick(scalePtr);
 
+                // Warped weighting post-process
+                int warpAmount = alg->v[kParamWarpAmount];
+                if (warpAmount > 0 && scalePtr) {
+                    int degOctave;
+                    int degree = scalePtr->findNearestDegree(eo.pitch, degOctave);
+                    int weightMode = alg->v[kParamNoteWeight];
+                    int warped = scalePtr->warpDegree(degree, (ScaleQuantizer::WeightMode)weightMode, warpAmount);
+                    if (warped != degree) {
+                        eo.pitch = scalePtr->quantize(warped, degOctave, 0);
+                        eo.midiNote = scalePtr->scaleDegreeToMidi(warped, degOctave + 5, 0);
+                    }
+                }
+
                 // Apply root note and octave offsets (only for scale-quantized engines)
                 float finalPitch;
                 if (scaleEnable) {
