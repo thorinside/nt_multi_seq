@@ -11,6 +11,31 @@ static const char* rootNoteNames[] = {
     "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
 };
 
+static void applyRoutingGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
+{
+    if (algIdx < 0) return;
+    int base = alg->channels[ch].paramBase;
+    uint32_t paramOffset = NT_parameterOffset();
+    bool isCv = (alg->v[base + kChRouting] == kRoutingCV);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChCvOut) + paramOffset, !isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChCvOutMode) + paramOffset, !isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChGateOut) + paramOffset, !isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChGateOutMode) + paramOffset, !isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiChannel) + paramOffset, isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiDest) + paramOffset, isCv);
+}
+
+static void applyEngineSlotGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
+{
+    if (algIdx < 0 || !alg->channels[ch].engine) return;
+    int engBase = alg->channels[ch].engineParamBase;
+    uint32_t paramOffset = NT_parameterOffset();
+    _NT_parameter tempDefs[kMaxEngineParams];
+    int numActive = alg->channels[ch].engine->getParameterDefs(tempDefs);
+    for (int i = 0; i < kMaxEngineParams; ++i)
+        NT_setParameterGrayedOut(algIdx, (uint32_t)(engBase + i) + paramOffset, i >= numActive);
+}
+
 void parameterChanged(_NT_algorithm* self, int p)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
@@ -38,16 +63,8 @@ void parameterChanged(_NT_algorithm* self, int p)
         int localOffset = p - base;
 
         // Output mode changed -> gray/ungray CV/MIDI params
-        if (localOffset == kChOutputMode) {
-            int outputMode = alg->v[p];
-            bool isCv = (outputMode == kOutputCV);
-            // Gray out MIDI params in CV mode, CV params in MIDI mode
-            NT_setParameterGrayedOut(algIdx, base + kChCvOut, !isCv);
-            NT_setParameterGrayedOut(algIdx, base + kChCvOutMode, !isCv);
-            NT_setParameterGrayedOut(algIdx, base + kChGateOut, !isCv);
-            NT_setParameterGrayedOut(algIdx, base + kChGateOutMode, !isCv);
-            NT_setParameterGrayedOut(algIdx, base + kChMidiChannel, isCv);
-            NT_setParameterGrayedOut(algIdx, base + kChMidiDest, isCv);
+        if (localOffset == kChRouting) {
+            applyRoutingGrayouts(alg, algIdx, ch);
             return;
         }
 
@@ -57,7 +74,7 @@ void parameterChanged(_NT_algorithm* self, int p)
             return;
         }
 
-        // Engine type changed
+        // Engine type changed (or init replay after extractParameters wiped grayouts)
         if (localOffset == kChEngineType) {
             EngineType newType = (EngineType)alg->v[p];
             if (newType != alg->channels[ch].engineType) {
@@ -92,17 +109,31 @@ void parameterChanged(_NT_algorithm* self, int p)
                 _NT_parameter engineDefs[kMaxEngineParams];
                 int numEngDefs = alg->channels[ch].engine->getParameterDefs(engineDefs);
 
+                // Replay stored parameter values into new engine
+                for (int i = 0; i < numEngDefs; ++i)
+                    alg->channels[ch].engine->parameterChanged(i, alg->v[engBase + i]);
+
                 for (int i = 0; i < kMaxEngineParams; ++i) {
                     if (i < numEngDefs) {
                         alg->paramDefs[engBase + i] = engineDefs[i];
-                        NT_setParameterGrayedOut(algIdx, engBase + i, false);
                     } else {
                         alg->paramDefs[engBase + i] = { .name = "-", .min = 0, .max = 0, .def = 0, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr };
-                        NT_setParameterGrayedOut(algIdx, engBase + i, true);
                     }
-                    NT_updateParameterDefinition(algIdx, engBase + i);
+                    if (algIdx >= 0)
+                        NT_updateParameterDefinition(algIdx, engBase + i);
                 }
+
+                // Update engine page param count (indices already pre-filled
+                // sequentially in construct, so only numParams needs updating)
+                int epi = alg->channels[ch].enginePageIndex;
+                alg->pageDefs[epi].numParams = (uint8_t)numEngDefs;
             }
+
+            // Always apply routing+engine slot grayouts — construct grayouts get
+            // wiped by the emulator's extractParameters/clearParameters cycle,
+            // and this handler is guaranteed to run during init parameter replay.
+            applyRoutingGrayouts(alg, algIdx, ch);
+            applyEngineSlotGrayouts(alg, algIdx, ch);
             return;
         }
 

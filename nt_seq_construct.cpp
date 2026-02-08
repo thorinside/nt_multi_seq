@@ -22,7 +22,7 @@ static const _NT_parameter channelCommonParams[] = {
     { .name = "Engine", .min = 0, .max = kNumEngineTypes - 1, .def = kEngineSoma, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = engineTypeStrings },
     NT_PARAMETER_CV_INPUT( "Clock In", 0, 1 )
     NT_PARAMETER_CV_INPUT( "Reset In", 0, 2 )
-    { .name = "Output Mode", .min = 0, .max = kNumOutputModes - 1, .def = kOutputCV, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = outputModeStrings },
+    { .name = "Routing", .min = 0, .max = kNumRoutings - 1, .def = kRoutingCV, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = routingStrings },
     NT_PARAMETER_CV_OUTPUT( "Pitch Out", 1, 15 )
     NT_PARAMETER_OUTPUT_MODE( "Pitch mode" )
     NT_PARAMETER_CV_OUTPUT( "Gate Out", 1, 14 )
@@ -161,8 +161,8 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     pageIdx++;
 
     // Per-channel pages
-    static const char* chCommonPageNames[] = { "Ch 1", "Ch 2", "Ch 3", "Ch 4" };
-    static const char* chEnginePageNames[] = { "Ch 1 Eng", "Ch 2 Eng", "Ch 3 Eng", "Ch 4 Eng" };
+    static const char* chCommonPageNames[] = { "Sequencer 1 Routing", "Sequencer 2 Routing", "Sequencer 3 Routing", "Sequencer 4 Routing" };
+    static const char* chEnginePageNames[] = { "Sequencer 1", "Sequencer 2", "Sequencer 3", "Sequencer 4" };
 
     for (int ch = 0; ch < (int)numChannels; ++ch) {
         // Channel common page
@@ -179,8 +179,14 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         idxOffset += kNumChannelCommonParams;
         pageIdx++;
 
-        // Channel engine page
+        // Channel engine page — reserve kMaxEngineParams index slots so
+        // engine swap can update the page without overflowing into the
+        // next page's index space.
         uint8_t* engPageIdx = &alg->pageIndices[idxOffset];
+        // Pre-fill all slots with sequential engine param indices
+        for (int i = 0; i < kMaxEngineParams; ++i)
+            engPageIdx[i] = (uint8_t)(alg->channels[ch].engineParamBase + i);
+
         _NT_parameterPage engPage;
         int numEngParams = alg->channels[ch].engine->getPageDefs(
             &engPage, engPageIdx, alg->channels[ch].engineParamBase);
@@ -193,7 +199,8 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             .unused = {0, 0},
             .params = engPageIdx
         };
-        idxOffset += numEngParams;
+        alg->channels[ch].enginePageIndex = pageIdx;
+        idxOffset += kMaxEngineParams;
         pageIdx++;
     }
 
@@ -218,11 +225,12 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     // Gray out MIDI params initially (CV mode default) and unused engine slots
     int algIdx = NT_algorithmIndex(static_cast<const _NT_algorithm*>(alg));
     if (algIdx >= 0) {
+        uint32_t paramOffset = NT_parameterOffset();
         for (int ch = 0; ch < (int)numChannels; ++ch) {
             int base = alg->channels[ch].paramBase;
             // Gray out MIDI params when in CV mode (default)
-            NT_setParameterGrayedOut(algIdx, base + kChMidiChannel, true);
-            NT_setParameterGrayedOut(algIdx, base + kChMidiDest, true);
+            NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiChannel) + paramOffset, true);
+            NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiDest) + paramOffset, true);
 
             // Gray out unused engine param slots
             int numEngDefs = 0;
@@ -230,7 +238,7 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             if (alg->channels[ch].engine)
                 numEngDefs = alg->channels[ch].engine->getParameterDefs(tempDefs);
             for (int i = numEngDefs; i < kMaxEngineParams; ++i)
-                NT_setParameterGrayedOut(algIdx, alg->channels[ch].engineParamBase + i, true);
+                NT_setParameterGrayedOut(algIdx, (uint32_t)(alg->channels[ch].engineParamBase + i) + paramOffset, true);
         }
     }
 
