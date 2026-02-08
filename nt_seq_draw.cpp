@@ -190,7 +190,7 @@ static void drawFocusEngineDetail(NtSeq* alg, int ch, int y1, int y2)
         buf[len] = 0;
         NT_drawText(140, y1, buf, 8, kNT_textLeft, kNT_textTiny);
 
-        // Line 2: Len:8 Off:0 Rev:Off Mut:25% Gate:85%
+        // Line 2: Len:8 Off:0 Rev:Off Mut:25% Gate:85% GLen:50%
         len = 0;
         s = "Len:"; while (*s) buf[len++] = *s++;
         len += NT_intToString(buf + len, alg->v[base + 2]); // kThorpLength
@@ -205,6 +205,9 @@ static void drawFocusEngineDetail(NtSeq* alg, int ch, int y1, int y2)
         buf[len++] = '%';
         s = " Gate:"; while (*s) buf[len++] = *s++;
         len += NT_intToString(buf + len, alg->v[base + 6]); // kThorpGateProb
+        buf[len++] = '%';
+        s = " GLen:"; while (*s) buf[len++] = *s++;
+        len += NT_intToString(buf + len, alg->v[base + 11]); // kThorpGateLen
         buf[len++] = '%';
         buf[len] = 0;
         NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);

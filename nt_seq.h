@@ -16,8 +16,8 @@ constexpr int kMaxChannels = 4;
 constexpr int kMaxEngineParams = 15;
 
 // Maximum total parameters
-// Global(3) + per-channel(12 common + 15 engine) * 4 = 111
-constexpr int kMaxTotalParams = 3 + kMaxChannels * (12 + kMaxEngineParams);
+// Global(3) + per-channel(14 common + 15 engine) * 4 = 119
+constexpr int kMaxTotalParams = 3 + kMaxChannels * (14 + kMaxEngineParams);
 
 // Maximum pages: 1 global + 2 per channel (common + engine)
 constexpr int kMaxPages = 1 + kMaxChannels * 2;
@@ -46,6 +46,8 @@ enum ChannelParamOffset {
     kChCvOutMode,
     kChGateOut,
     kChGateOutMode,
+    kChVelOut,
+    kChVelOutMode,
     kChMidiChannel,
     kChMidiDest,
     kChClockDiv,
@@ -123,6 +125,9 @@ struct ChannelState {
     // Per-channel clock/reset edge detection
     bool clockHigh;
     bool resetHigh;
+    int clockPeriodSamples;
+    int samplesSinceClock;
+    int gateSamplesRemaining; // -1=legato hold, 0=off, >0=countdown in samples
 
     // Cached CV output for sample-and-hold
     float cachedPitch;
@@ -139,6 +144,9 @@ struct ChannelState {
         , enginePageIndex(0)
         , clockHigh(false)
         , resetHigh(false)
+        , clockPeriodSamples(0)
+        , samplesSinceClock(0)
+        , gateSamplesRemaining(0)
         , cachedPitch(0.0f)
         , cachedGate(0.0f)
         , cachedVelocity(0.0f)

@@ -21,6 +21,8 @@ static void applyRoutingGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChCvOutMode) + paramOffset, !isCv);
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChGateOut) + paramOffset, !isCv);
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChGateOutMode) + paramOffset, !isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChVelOut) + paramOffset, !isCv);
+    NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChVelOutMode) + paramOffset, !isCv);
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiChannel) + paramOffset, isCv);
     NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiDest) + paramOffset, isCv);
 }

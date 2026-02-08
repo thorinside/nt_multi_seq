@@ -91,9 +91,12 @@ ThorpEngine::ThorpEngine()
     , octRange_(1)
     , stepMode_(kStepSeq)
     , mutation_(0)
+    , gateLen_(50)
     , currentStep_(-1)
     , pingDir_(1)
     , velStep_(0)
+    , numLatchedNotes_(0)
+    , numActiveNotes_(0)
     , patternDirty_(true)
     , rngState_(12345)
 {
@@ -121,6 +124,39 @@ void ThorpEngine::loadPattern()
     patternDirty_ = false;
 }
 
+void ThorpEngine::addUniqueNote(uint8_t* arr, int& count, uint8_t note)
+{
+    for (int i = 0; i < count; ++i) {
+        if (arr[i] == note)
+            return;
+    }
+    if (count >= kMaxHeldNotes)
+        return;
+    arr[count++] = note;
+    // Keep ascending order for deterministic arp mapping.
+    for (int i = count - 1; i > 0; --i) {
+        if (arr[i] < arr[i - 1]) {
+            uint8_t t = arr[i];
+            arr[i] = arr[i - 1];
+            arr[i - 1] = t;
+        } else {
+            break;
+        }
+    }
+}
+
+void ThorpEngine::removeNote(uint8_t* arr, int& count, uint8_t note)
+{
+    for (int i = 0; i < count; ++i) {
+        if (arr[i] == note) {
+            for (int j = i; j < count - 1; ++j)
+                arr[j] = arr[j + 1];
+            count--;
+            return;
+        }
+    }
+}
+
 void ThorpEngine::init(uint32_t sampleRate)
 {
     rngState_ = sampleRate ^ 0xBEEFCAFE;
@@ -136,6 +172,21 @@ void ThorpEngine::reset()
     pingDir_ = 1;
     velStep_ = 0;
     loadPattern();
+}
+
+void ThorpEngine::noteOn(uint8_t midiNote, uint8_t velocity)
+{
+    (void)velocity;
+    // Match Lua phrase behavior: first new press clears latched set.
+    if (numActiveNotes_ == 0)
+        numLatchedNotes_ = 0;
+    addUniqueNote(activeNotes_, numActiveNotes_, midiNote);
+    addUniqueNote(latchedNotes_, numLatchedNotes_, midiNote);
+}
+
+void ThorpEngine::noteOff(uint8_t midiNote)
+{
+    removeNote(activeNotes_, numActiveNotes_, midiNote);
 }
 
 EngineOutput ThorpEngine::clockTick(const ScaleQuantizer* scale)
@@ -242,16 +293,27 @@ EngineOutput ThorpEngine::clockTick(const ScaleQuantizer* scale)
         return out;
     }
 
-    // Map pattern value to scale degree
-    // patVal is 1-8, numNotes_ is 2-8 (how many scale degrees are available)
-    int degree = (patVal - 1) % numNotes_;
-
-    // Octave shift
+    bool hasLatchedNotes = numLatchedNotes_ > 0;
+    int degree = 0;
     int octShift = 0;
-    if (octJump_ > 0 && (int)(rng() % 100) < octJump_) {
-        octShift = rngRange(-octRange_, octRange_);
-        // Avoid 0 shift (that's not really a "jump")
-        if (octShift == 0) octShift = rngRange(0, 1) ? 1 : -1;
+    int midi = 60;
+    if (hasLatchedNotes) {
+        int noteIdx = (patVal - 1) % numLatchedNotes_;
+        midi = (int)latchedNotes_[noteIdx];
+        if (octJump_ > 0 && (int)(rng() % 100) < octJump_) {
+            int jump = rngRange(-octRange_, octRange_);
+            midi += jump * 12;
+            if (midi < 0) midi = 0;
+            if (midi > 127) midi = 127;
+        }
+    } else {
+        // Fallback: generated scale degree behavior
+        degree = (patVal - 1) % numNotes_;
+        if (octJump_ > 0 && (int)(rng() % 100) < octJump_) {
+            octShift = rngRange(-octRange_, octRange_);
+            // Avoid 0 shift (that's not really a "jump")
+            if (octShift == 0) octShift = rngRange(0, 1) ? 1 : -1;
+        }
     }
 
     // Velocity from velocity pattern
@@ -263,13 +325,24 @@ EngineOutput ThorpEngine::clockTick(const ScaleQuantizer* scale)
     out.gate = 5.0f;
 
     // Pitch via scale quantizer
-    if (scale && scale->isLoaded()) {
+    if (hasLatchedNotes) {
+        if (scale && scale->isLoaded()) {
+            out.pitch = scale->midiNoteToVOct((uint8_t)midi, 0);
+            int qMidi = (int)(out.pitch * 12.0f + 60.0f + 0.5f);
+            if (qMidi < 0) qMidi = 0;
+            if (qMidi > 127) qMidi = 127;
+            out.midiNote = (uint8_t)qMidi;
+        } else {
+            out.pitch = (float)(midi - 60) / 12.0f;
+            out.midiNote = (uint8_t)midi;
+        }
+    } else if (scale && scale->isLoaded()) {
         out.pitch = scale->quantize(degree, octShift, 0);
         out.midiNote = scale->scaleDegreeToMidi(degree, octShift + 5, 0);
     } else {
         // Fallback: chromatic, each degree = 1 semitone
         out.pitch = (float)(degree + octShift * 12) / 12.0f;
-        int midi = 60 + degree + octShift * 12;
+        midi = 60 + degree + octShift * 12;
         if (midi < 0) midi = 0;
         if (midi > 127) midi = 127;
         out.midiNote = (uint8_t)midi;
@@ -301,6 +374,7 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
     case kThorpOctRange:   octRange_ = value; break;
     case kThorpStepMode:   stepMode_ = value; break;
     case kThorpMutation:   mutation_ = value; break;
+    case kThorpGateLen:    gateLen_ = value; break;
     }
 }
 
@@ -317,6 +391,7 @@ int ThorpEngine::getParameterDefs(_NT_parameter* defs) const
     defs[kThorpOctRange]   = { .name = "Oct Range",  .min = 1, .max = 3,                   .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kThorpStepMode]   = { .name = "Step Mode",  .min = 0, .max = kNumStepModes - 1,   .def = kStepSeq, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kStepModeStrings };
     defs[kThorpMutation]   = { .name = "Mutation",   .min = 0, .max = 100,                 .def = 0,        .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpGateLen]    = { .name = "Gate Len",   .min = 1, .max = 100,                 .def = 50,       .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     return kNumThorpParams;
 }
 

@@ -54,8 +54,10 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
         float* reset;
         float* pitch;
         float* gate;
+        float* velocity;
         bool pitchReplace;
         bool gateReplace;
+        bool velocityReplace;
         bool isCvMode;
     };
     ChannelBusses chBus[kMaxChannels] = {};
@@ -72,14 +74,27 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
         if (chBus[ch].isCvMode) {
             chBus[ch].pitch = busPtr(busFrames, alg->v[base + kChCvOut], numFrames);
             chBus[ch].gate = busPtr(busFrames, alg->v[base + kChGateOut], numFrames);
+            chBus[ch].velocity = busPtr(busFrames, alg->v[base + kChVelOut], numFrames);
             chBus[ch].pitchReplace = alg->v[base + kChCvOutMode];
             chBus[ch].gateReplace = alg->v[base + kChGateOutMode];
+            chBus[ch].velocityReplace = alg->v[base + kChVelOutMode];
         }
     }
 
     // --- Audio-rate loop ---
     for (int n = 0; n < numFrames; ++n) {
         for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
+            if (alg->channels[ch].samplesSinceClock < 0x3fffffff)
+                alg->channels[ch].samplesSinceClock++;
+
+            if (alg->channels[ch].engine && alg->channels[ch].engine->usesTimedGate()) {
+                if (alg->channels[ch].gateSamplesRemaining > 0) {
+                    alg->channels[ch].gateSamplesRemaining--;
+                    if (alg->channels[ch].gateSamplesRemaining == 0)
+                        alg->channels[ch].cachedGate = 0.0f;
+                }
+            }
+
             // Per-channel reset edge detection
             bool resetRise = false;
             if (chBus[ch].reset)
@@ -90,6 +105,8 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                     alg->channels[ch].engine->reset();
                 alg->channels[ch].clockProc.reset();
                 alg->channels[ch].cachedGate = 0.0f;
+                alg->channels[ch].gateSamplesRemaining = 0;
+                alg->channels[ch].samplesSinceClock = 0;
             }
 
             // Per-channel clock edge detection
@@ -102,6 +119,11 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
 
                 // Per-channel clock divider
                 if (!alg->channels[ch].clockProc.tick()) continue;
+
+                if (alg->channels[ch].samplesSinceClock > 0) {
+                    alg->channels[ch].clockPeriodSamples = alg->channels[ch].samplesSinceClock;
+                    alg->channels[ch].samplesSinceClock = 0;
+                }
 
                 int base = alg->channels[ch].paramBase;
                 bool scaleEnable = alg->v[base + kChScaleEnable] != 0;
@@ -120,10 +142,32 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                     finalPitch = eo.pitch;
                 }
 
-                // Cache CV values for sample-and-hold output
-                alg->channels[ch].cachedPitch = finalPitch;
-                alg->channels[ch].cachedGate = eo.gate;
-                alg->channels[ch].cachedVelocity = eo.velocity;
+                bool timedGate = alg->channels[ch].engine->usesTimedGate();
+                if (timedGate) {
+                    if (eo.gate > 0.0f) {
+                        // New note: update pitch/velocity and retrigger timed gate.
+                        alg->channels[ch].cachedPitch = finalPitch;
+                        alg->channels[ch].cachedGate = eo.gate;
+                        alg->channels[ch].cachedVelocity = eo.velocity;
+
+                        int gateLenPct = alg->channels[ch].engine->gateLengthPercent();
+                        if (gateLenPct >= 100) {
+                            // Legato mode: hold gate until explicitly reset.
+                            alg->channels[ch].gateSamplesRemaining = -1;
+                        } else {
+                            int holdSamples = (alg->channels[ch].clockPeriodSamples * gateLenPct) / 100;
+                            if (holdSamples < 1) holdSamples = 1;
+                            alg->channels[ch].gateSamplesRemaining = holdSamples;
+                        }
+                    }
+                    // Rests/probability misses intentionally do not overwrite
+                    // pitch/velocity or force gate low; countdown handles release.
+                } else {
+                    // Default sample-and-hold behavior for engines without timed gate.
+                    alg->channels[ch].cachedPitch = finalPitch;
+                    alg->channels[ch].cachedGate = eo.gate;
+                    alg->channels[ch].cachedVelocity = eo.velocity;
+                }
 
                 // MIDI output (only on clock tick)
                 if (!chBus[ch].isCvMode) {
@@ -181,6 +225,40 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                 else
                     chBus[ch].gate[n] += alg->channels[ch].cachedGate;
             }
+            if (chBus[ch].velocity) {
+                if (chBus[ch].velocityReplace)
+                    chBus[ch].velocity[n] = alg->channels[ch].cachedVelocity;
+                else
+                    chBus[ch].velocity[n] += alg->channels[ch].cachedVelocity;
+            }
         }
+    }
+}
+
+void midiMessage(_NT_algorithm* self, uint8_t byte0, uint8_t byte1, uint8_t byte2)
+{
+    NtSeq* alg = static_cast<NtSeq*>(self);
+    uint8_t status = byte0 & 0xF0;
+    uint8_t midiCh = (byte0 & 0x0F) + 1;
+    uint8_t note = byte1 & 0x7F;
+    uint8_t velocity = byte2 & 0x7F;
+
+    bool isNoteOn = (status == 0x90 && velocity > 0);
+    bool isNoteOff = (status == 0x80 || (status == 0x90 && velocity == 0));
+    if (!isNoteOn && !isNoteOff)
+        return;
+
+    for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
+        if (!alg->channels[ch].engine)
+            continue;
+        int base = alg->channels[ch].paramBase;
+        int configuredCh = alg->v[base + kChMidiChannel];
+        if (configuredCh != (int)midiCh)
+            continue;
+
+        if (isNoteOn)
+            alg->channels[ch].engine->noteOn(note, velocity);
+        else
+            alg->channels[ch].engine->noteOff(note);
     }
 }

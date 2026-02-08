@@ -17,6 +17,10 @@ public:
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;
+    void noteOn(uint8_t midiNote, uint8_t velocity) override;
+    void noteOff(uint8_t midiNote) override;
+    bool usesTimedGate() const override { return true; }
+    int gateLengthPercent() const override { return gateLen_; }
 
     enum Param {
         kThorpPattern = 0,
@@ -30,6 +34,7 @@ public:
         kThorpOctRange,
         kThorpStepMode,
         kThorpMutation,
+        kThorpGateLen,
         kNumThorpParams
     };
 
@@ -58,11 +63,17 @@ private:
     int octRange_;
     int stepMode_;
     int mutation_;
+    int gateLen_;
 
     // Playback state
     int currentStep_;
     int pingDir_;
     int velStep_;
+    static constexpr int kMaxHeldNotes = 16;
+    uint8_t latchedNotes_[kMaxHeldNotes];
+    uint8_t activeNotes_[kMaxHeldNotes];
+    int numLatchedNotes_;
+    int numActiveNotes_;
 
     // Working copy of pattern for mutation
     int8_t workingPattern_[kPatternLen];
@@ -74,6 +85,8 @@ private:
     int rngRange(int min, int max);
 
     void loadPattern();
+    void addUniqueNote(uint8_t* arr, int& count, uint8_t note);
+    void removeNote(uint8_t* arr, int& count, uint8_t note);
 };
 
 #endif // THORP_ENGINE_H

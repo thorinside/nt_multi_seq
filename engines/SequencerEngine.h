@@ -33,6 +33,15 @@ public:
     virtual int currentStep() const { return -1; }
     virtual int sequenceLength() const { return 0; }
     virtual int getStatusText(char* buf, int maxLen) const { buf[0] = 0; return 0; }
+
+    // Optional hooks for engines that react to MIDI note input directly.
+    virtual void noteOn(uint8_t /*midiNote*/, uint8_t /*velocity*/) {}
+    virtual void noteOff(uint8_t /*midiNote*/) {}
+
+    // Optional timed-gate behavior. Engines returning true can request that
+    // the host hold gate high for a percentage of measured clock period.
+    virtual bool usesTimedGate() const { return false; }
+    virtual int gateLengthPercent() const { return 100; }
 };
 
 #endif // SEQUENCER_ENGINE_H

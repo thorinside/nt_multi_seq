@@ -27,6 +27,8 @@ static const _NT_parameter channelCommonParams[] = {
     NT_PARAMETER_OUTPUT_MODE( "Pitch mode" )
     NT_PARAMETER_CV_OUTPUT( "Gate Out", 1, 14 )
     NT_PARAMETER_OUTPUT_MODE( "Gate mode" )
+    NT_PARAMETER_CV_OUTPUT( "Velocity Out", 1, 16 )
+    NT_PARAMETER_OUTPUT_MODE( "Velocity mode" )
     { .name = "MIDI Ch", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
     { .name = "MIDI Dest", .min = 0, .max = kNumMidiDests - 1, .def = kMidiDestBreakout, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = midiDestStrings },
     { .name = "Clock Div", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
@@ -105,9 +107,11 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         // Copy common channel params
         memcpy(&alg->paramDefs[p], channelCommonParams, sizeof(channelCommonParams));
 
-        // Per-channel output bus defaults: gate=14+ch*2, pitch=15+ch*2
-        alg->paramDefs[p + kChGateOut].def = 14 + ch * 2;
-        alg->paramDefs[p + kChCvOut].def = 15 + ch * 2;
+        // Per-channel CV output defaults:
+        // ch0: gate=14 pitch=15 vel=16, ch1: 17/18/19, etc.
+        alg->paramDefs[p + kChGateOut].def = 14 + ch * 3;
+        alg->paramDefs[p + kChCvOut].def = 15 + ch * 3;
+        alg->paramDefs[p + kChVelOut].def = 16 + ch * 3;
 
         p += kNumChannelCommonParams;
 
@@ -136,6 +140,11 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
 
         // Initialize clock processor
         alg->channels[ch].clockProc.setDivider(1);
+        int defaultClock = (int)(alg->sampleRate / 8); // ~125ms at 48kHz
+        if (defaultClock < 1) defaultClock = 1;
+        alg->channels[ch].clockPeriodSamples = defaultClock;
+        alg->channels[ch].samplesSinceClock = defaultClock;
+        alg->channels[ch].gateSamplesRemaining = 0;
         alg->channels[ch].lastMidiNote = 0;
         alg->channels[ch].midiNoteOn = false;
     }

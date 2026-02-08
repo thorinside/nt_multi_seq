@@ -12,6 +12,7 @@ void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specif
 _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorithmRequirements& req, const int32_t* specifications);
 void parameterChanged(_NT_algorithm* self, int p);
 void step(_NT_algorithm* self, float* busFrames, int numFramesBy4);
+void midiMessage(_NT_algorithm* self, uint8_t byte0, uint8_t byte1, uint8_t byte2);
 bool draw(_NT_algorithm* self);
 uint32_t hasCustomUi(_NT_algorithm* self);
 void customUi(_NT_algorithm* self, const _NT_uiData& data);
@@ -19,9 +20,9 @@ int parameterUiPrefix(_NT_algorithm* self, int p, char* buff);
 int parameterString(_NT_algorithm* self, int p, int v, char* buff);
 
 static const _NT_factory factory = {
-    .guid = NT_MULTICHAR('N', 'S', 'Q', '1'),
-    .name = "Multi Sequencer",
-    .description = "Multi-channel sequencer with 5 engines and .scl microtuning",
+    .guid = NT_MULTICHAR('T', 'h', 'M', 's'),
+    .name = "nt_multi_seq",
+    .description = "Multi-channel sequencer with selectable engines and .scl microtuning",
     .numSpecifications = ARRAY_SIZE(specifications),
     .specifications = specifications,
     .calculateStaticRequirements = nullptr,
@@ -32,7 +33,7 @@ static const _NT_factory factory = {
     .step = step,
     .draw = draw,
     .midiRealtime = nullptr,
-    .midiMessage = nullptr,
+    .midiMessage = midiMessage,
     .tags = kNT_tagInstrument,
     .hasCustomUi = hasCustomUi,
     .customUi = customUi,
