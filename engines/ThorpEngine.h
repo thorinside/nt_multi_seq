@@ -22,6 +22,16 @@ public:
     void noteCvGate(float vOct, bool rising) override;
     bool usesTimedGate() const override { return true; }
     int gateLengthPercent() const override { return gateLen_; }
+    // Focus-page song editing helpers.
+    void uiSetChainLength(int len);
+    void uiSetChainPos(int pos);
+    int uiChainLength() const;
+    int uiChainPos() const;
+    int uiChainSlot() const;
+    void uiAdjustChainPos(int delta);
+    void uiAdjustChainSlot(int delta);
+    void uiInsertChainStep();
+    void uiDeleteChainStep();
 
     enum Param {
         kThorpPattern = 0,
@@ -95,6 +105,7 @@ private:
     int stepCount_;
     int localStep_;
     int chainPos_;
+    int editChainPos_;
     bool gateActive_;
     int lastMidiNote_;
     float lastPitch_;

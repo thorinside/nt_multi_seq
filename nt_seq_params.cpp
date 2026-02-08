@@ -11,6 +11,13 @@ static const char* rootNoteNames[] = {
     "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
 };
 
+static inline int16_t clampParamValue(int16_t v, int16_t minV, int16_t maxV)
+{
+    if (v < minV) return minV;
+    if (v > maxV) return maxV;
+    return v;
+}
+
 static void applyRoutingGrayouts(NtSeq* alg, int algIdx, uint32_t ch)
 {
     if (algIdx < 0) return;
@@ -111,9 +118,16 @@ void parameterChanged(_NT_algorithm* self, int p)
                 _NT_parameter engineDefs[kMaxEngineParams];
                 int numEngDefs = alg->channels[ch].engine->getParameterDefs(engineDefs);
 
-                // Replay stored parameter values into new engine
-                for (int i = 0; i < numEngDefs; ++i)
-                    alg->channels[ch].engine->parameterChanged(i, alg->v[engBase + i]);
+                // Initialize the new engine from its own defaults.
+                // Do this directly to avoid re-entrant parameter writes from
+                // within parameterChanged(), which can destabilize the host.
+                for (int i = 0; i < numEngDefs; ++i) {
+                    int16_t defVal = clampParamValue(
+                        (int16_t)engineDefs[i].def,
+                        (int16_t)engineDefs[i].min,
+                        (int16_t)engineDefs[i].max);
+                    alg->channels[ch].engine->parameterChanged(i, defVal);
+                }
 
                 for (int i = 0; i < kMaxEngineParams; ++i) {
                     if (i < numEngDefs) {
@@ -125,10 +139,12 @@ void parameterChanged(_NT_algorithm* self, int p)
                         NT_updateParameterDefinition(algIdx, engBase + i);
                 }
 
-                // Update engine page param count (indices already pre-filled
-                // sequentially in construct, so only numParams needs updating)
                 int epi = alg->channels[ch].enginePageIndex;
-                alg->pageDefs[epi].numParams = (uint8_t)numEngDefs;
+                uint8_t* engPageIdx = const_cast<uint8_t*>(alg->pageDefs[epi].params);
+                _NT_parameterPage tmpPage;
+                (void)alg->channels[ch].engine->getPageDefs(
+                    &tmpPage, engPageIdx, engBase);
+                alg->pageDefs[epi].numParams = (uint8_t)kMaxEngineParams;
             }
 
             // Always apply routing+engine slot grayouts — construct grayouts get

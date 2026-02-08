@@ -1,6 +1,13 @@
 #include "SomaEngine.h"
 #include "../scale/ScaleQuantizer.h"
 
+static inline int clampInt(int v, int lo, int hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
 SomaEngine::SomaEngine()
     : octaveSpread_(50)
     , noteMutate_(70)
@@ -169,19 +176,19 @@ void SomaEngine::parameterChanged(int localIndex, int16_t value)
 {
     switch (localIndex) {
     case kSomaOctaveSpread:
-        octaveSpread_ = value;
+        octaveSpread_ = clampInt(value, 0, 100);
         break;
     case kSomaNoteMutate:
-        noteMutate_ = value;
+        noteMutate_ = clampInt(value, 0, 100);
         break;
     case kSomaGateMutate:
-        gateMutate_ = value;
+        gateMutate_ = clampInt(value, 0, 100);
         break;
     case kSomaLength:
-        length_ = value;
+        length_ = clampInt(value, 1, kMaxSteps);
         break;
     case kSomaVelocity:
-        velocity_ = value;
+        velocity_ = clampInt(value, 0, 100);
         break;
     }
 }

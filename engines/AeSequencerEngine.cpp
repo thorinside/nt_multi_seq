@@ -1,8 +1,16 @@
 #include "AeSequencerEngine.h"
+#include "../scale/ScaleQuantizer.h"
 
 static const char* const polarityStrings[] = {
     "Positive", "Bipolar", "Negative", nullptr
 };
+
+static inline int clampInt(int v, int lo, int hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
 
 AeSequencerEngine::AeSequencerEngine()
     : cvSeq_(0)
@@ -27,18 +35,28 @@ uint32_t AeSequencerEngine::rng()
     return rngState_;
 }
 
+int16_t AeSequencerEngine::sequenceRaw(uint32_t seed, int stepIndex) const
+{
+    // Deterministic hash from (seed, step) gives stable pseudo-random
+    // 16-bit values without storing 32-step tables for all 20x2 banks.
+    uint32_t x = seed ^ ((uint32_t)stepIndex * 0x9E3779B9u);
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return (int16_t)(x & 0xFFFFu);
+}
+
 void AeSequencerEngine::init(uint32_t sampleRate)
 {
     rngState_ = sampleRate ^ 0xCAFEBABE;
 
     for (int s = 0; s < kNumSequences; ++s) {
+        voltSeqs_[s].seed = rng();
         voltSeqs_[s].currentStep = 0;
-        for (int i = 0; i < kMaxSteps; ++i)
-            voltSeqs_[s].steps[i] = (int16_t)(rng() & 0xFFFF);
-
+        gateSeqs_[s].seed = rng();
         gateSeqs_[s].currentStep = 0;
-        for (int i = 0; i < kMaxSteps; ++i)
-            gateSeqs_[s].steps[i] = (uint8_t)(rng() % 100 + 1);
     }
 }
 
@@ -98,7 +116,7 @@ float AeSequencerEngine::quantizeVoltage(float value, float effMin, float effMax
     return quantized;
 }
 
-EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* /*scale*/)
+EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* scale)
 {
     EngineOutput out = { 0.0f, 0.0f, 5.0f, 60 };
 
@@ -112,7 +130,8 @@ EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* /*scale*/)
     // Compute voltage
     float effMin, effMax;
     getEffectiveRange(effMin, effMax);
-    float voltage = mapRawToVoltage(vs.steps[vs.currentStep], effMin, effMax);
+    int16_t cvRaw = sequenceRaw(vs.seed, (int)vs.currentStep);
+    float voltage = mapRawToVoltage(cvRaw, effMin, effMax);
     out.pitch = quantizeVoltage(voltage, effMin, effMax);
 
     // Advance gate sequence
@@ -123,13 +142,26 @@ EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* /*scale*/)
     gs.currentStep = (gs.currentStep + 1) % gateSteps;
 
     // Gate based on threshold
-    out.gate = (gs.steps[gs.currentStep] >= threshold_) ? 5.0f : 0.0f;
+    // AE essence: threshold 16-bit raw values for gate state.
+    int gateRaw = (int)sequenceRaw(gs.seed, (int)gs.currentStep);
+    int gateNorm = ((gateRaw + 32768) * 100) / 65535; // 0..100
+    out.gate = (gateNorm >= threshold_) ? 5.0f : 0.0f;
 
     // MIDI note approximation from voltage (1V/oct)
-    int midiNote = (int)(out.pitch * 12.0f + 60.0f);
+    int midiNote = (int)(out.pitch * 12.0f + 60.0f + 0.5f);
     if (midiNote < 0) midiNote = 0;
     if (midiNote > 127) midiNote = 127;
-    out.midiNote = (uint8_t)midiNote;
+
+    // Optional scale quantization, controlled by host "Scale On".
+    if (scale && scale->isLoaded()) {
+        out.pitch = scale->midiNoteToVOct((uint8_t)midiNote, 0);
+        int qMidi = (int)(out.pitch * 12.0f + 60.0f + 0.5f);
+        if (qMidi < 0) qMidi = 0;
+        if (qMidi > 127) qMidi = 127;
+        out.midiNote = (uint8_t)qMidi;
+    } else {
+        out.midiNote = (uint8_t)midiNote;
+    }
     out.velocity = (float)velocity_ * 0.05f; // 0-100% -> 0-5V
 
     return out;
@@ -147,23 +179,19 @@ void AeSequencerEngine::parameterChanged(int localIndex, int16_t value)
 {
     switch (localIndex) {
     case kAeCvSeq:
-        cvSeq_ = value - 1;
-        if (cvSeq_ < 0) cvSeq_ = 0;
-        if (cvSeq_ >= kNumSequences) cvSeq_ = kNumSequences - 1;
+        cvSeq_ = clampInt((int)value - 1, 0, kNumSequences - 1);
         break;
     case kAeGateSeq:
-        gateSeq_ = value - 1;
-        if (gateSeq_ < 0) gateSeq_ = 0;
-        if (gateSeq_ >= kNumSequences) gateSeq_ = kNumSequences - 1;
+        gateSeq_ = clampInt((int)value - 1, 0, kNumSequences - 1);
         break;
-    case kAeCvSteps:    cvSteps_ = value;    break;
-    case kAeMinCv:      minCv_ = value;      break;
-    case kAeMaxCv:      maxCv_ = value;      break;
-    case kAePolarity:   polarity_ = value;   break;
-    case kAeBitDepth:   bitDepth_ = value;   break;
-    case kAeGateSteps:  gateSteps_ = value;  break;
-    case kAeThreshold:  threshold_ = value;  break;
-    case kAeVelocity:   velocity_ = value;   break;
+    case kAeCvSteps:    cvSteps_ = clampInt(value, 1, kMaxSteps); break;
+    case kAeMinCv:      minCv_ = clampInt(value, -100, 100); break;
+    case kAeMaxCv:      maxCv_ = clampInt(value, -100, 100); break;
+    case kAePolarity:   polarity_ = clampInt(value, 0, kNumPolarities - 1); break;
+    case kAeBitDepth:   bitDepth_ = clampInt(value, 2, 16); break;
+    case kAeGateSteps:  gateSteps_ = clampInt(value, 1, kMaxSteps); break;
+    case kAeThreshold:  threshold_ = clampInt(value, 1, 100); break;
+    case kAeVelocity:   velocity_ = clampInt(value, 0, 100); break;
     }
 }
 
@@ -172,12 +200,12 @@ int AeSequencerEngine::getParameterDefs(_NT_parameter* defs) const
     defs[kAeCvSeq]     = { .name = "CV Seq",    .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kAeGateSeq]   = { .name = "Gate Seq",  .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kAeCvSteps]   = { .name = "CV Steps",  .min = 1,    .max = kMaxSteps,     .def = 8,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeMinCv]     = { .name = "Min CV",    .min = -100, .max = 100,           .def = -10,.unit = kNT_unitNone,    .scaling = kNT_scaling10,   .enumStrings = nullptr };
-    defs[kAeMaxCv]     = { .name = "Max CV",    .min = -100, .max = 100,           .def = 10, .unit = kNT_unitNone,    .scaling = kNT_scaling10,   .enumStrings = nullptr };
+    defs[kAeMinCv]     = { .name = "Min CV",    .min = -100, .max = 100,           .def = -10,.unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
+    defs[kAeMaxCv]     = { .name = "Max CV",    .min = -100, .max = 100,           .def = 10, .unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
     defs[kAePolarity]  = { .name = "Polarity",  .min = 0,    .max = kNumPolarities - 1, .def = kPolarityBipolar, .unit = kNT_unitEnum, .scaling = kNT_scalingNone, .enumStrings = polarityStrings };
-    defs[kAeBitDepth]  = { .name = "Bit Depth", .min = 2,    .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kAeBitDepth]  = { .name = "CV Bit Depth", .min = 2, .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kAeGateSteps] = { .name = "Gate Steps", .min = 1,   .max = kMaxSteps,     .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeThreshold] = { .name = "Threshold", .min = 1,    .max = 100,           .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kAeThreshold] = { .name = "Gate Threshold", .min = 1, .max = 100,         .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     defs[kAeVelocity]  = { .name = "Velocity",  .min = 0,    .max = 100,           .def = 100,.unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
     return kNumAeParams;
 }
@@ -185,24 +213,100 @@ int AeSequencerEngine::getParameterDefs(_NT_parameter* defs) const
 int AeSequencerEngine::currentStep() const { return voltSeqs_[cvSeq_].currentStep; }
 int AeSequencerEngine::sequenceLength() const { return cvSteps_; }
 
+int AeSequencerEngine::previewLength() const
+{
+    int cvLen = cvSteps_;
+    if (cvLen < 1) cvLen = 1;
+    if (cvLen > kMaxSteps) cvLen = kMaxSteps;
+
+    int gateLen = gateSteps_;
+    if (gateLen < 1) gateLen = 1;
+    if (gateLen > kMaxSteps) gateLen = kMaxSteps;
+
+    return (cvLen > gateLen) ? cvLen : gateLen;
+}
+
+void AeSequencerEngine::getPreviewStep(int stepIndex, uint8_t& cvLevel, bool& gateOn) const
+{
+    cvLevel = 0;
+    gateOn = false;
+
+    int length = previewLength();
+    if (length <= 0)
+        return;
+
+    int idx = stepIndex;
+    if (idx < 0) idx = 0;
+    idx %= length;
+
+    int cvLen = cvSteps_;
+    if (cvLen < 1) cvLen = 1;
+    if (cvLen > kMaxSteps) cvLen = kMaxSteps;
+    int cvIdx = idx % cvLen;
+
+    int gateLen = gateSteps_;
+    if (gateLen < 1) gateLen = 1;
+    if (gateLen > kMaxSteps) gateLen = kMaxSteps;
+    int gateIdx = idx % gateLen;
+
+    float effMin, effMax;
+    getEffectiveRange(effMin, effMax);
+
+    int16_t cvRaw = sequenceRaw(voltSeqs_[cvSeq_].seed, cvIdx);
+    float voltage = mapRawToVoltage(cvRaw, effMin, effMax);
+    float quantized = quantizeVoltage(voltage, effMin, effMax);
+
+    float range = effMax - effMin;
+    int levels = (1 << bitDepth_) - 1;
+    if (levels < 1) levels = 1;
+    int quantIdx = 0;
+    if (range > 0.0f) {
+        float stepSize = range / (float)levels;
+        quantIdx = (int)((quantized - effMin) / stepSize + 0.5f);
+        if (quantIdx < 0) quantIdx = 0;
+        if (quantIdx > levels) quantIdx = levels;
+    }
+    cvLevel = (uint8_t)((quantIdx * 15 + (levels / 2)) / levels);
+
+    int gateRaw = (int)sequenceRaw(gateSeqs_[gateSeq_].seed, gateIdx);
+    int gateNorm = ((gateRaw + 32768) * 100) / 65535; // 0..100
+    gateOn = (gateNorm >= threshold_);
+}
+
 int AeSequencerEngine::getStatusText(char* buf, int maxLen) const
 {
-    // Show "S1 8/32"
+    // Show "V1 G1 8/16"
     int len = 0;
-    if (len < maxLen - 1) buf[len++] = 'S';
+    if (len < maxLen - 1) buf[len++] = 'V';
     len += NT_intToString(buf + len, (int32_t)(cvSeq_ + 1));
+    if (len < maxLen - 2) { buf[len++] = ' '; buf[len++] = 'G'; }
+    len += NT_intToString(buf + len, (int32_t)(gateSeq_ + 1));
     if (len < maxLen - 1) buf[len++] = ' ';
     len += NT_intToString(buf + len, (int32_t)cvSteps_);
     if (len < maxLen - 1) buf[len++] = '/';
-    len += NT_intToString(buf + len, (int32_t)32);
+    len += NT_intToString(buf + len, (int32_t)gateSteps_);
     buf[len] = 0;
     return len;
 }
 
 int AeSequencerEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
 {
+    // Order chosen so hosts that effectively render only the first few
+    // entries still expose core AE shaping controls.
+    static const uint8_t order[kNumAeParams] = {
+        kAeCvSteps,
+        kAeMinCv,
+        kAeMaxCv,
+        kAeBitDepth,
+        kAeThreshold,
+        kAeCvSeq,
+        kAeGateSeq,
+        kAeGateSteps,
+        kAePolarity,
+        kAeVelocity
+    };
     for (int i = 0; i < kNumAeParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + i);
+        indices[i] = (uint8_t)(baseParamIndex + (int)order[i]);
     page->name = "AE Seq";
     page->numParams = kNumAeParams;
     page->group = 0;

@@ -32,7 +32,7 @@ static const _NT_parameter channelCommonParams[] = {
     { .name = "MIDI Ch", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
     { .name = "MIDI Dest", .min = 0, .max = kNumMidiDests - 1, .def = kMidiDestBreakout, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = midiDestStrings },
     { .name = "Clock Div", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
-    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = offOnStrings },
     NT_PARAMETER_CV_INPUT( "Note Gate In", 0, 3 )
     NT_PARAMETER_CV_INPUT( "Note CV In", 0, 4 )
 };
@@ -75,6 +75,12 @@ void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specif
     req.dtc = 0;
     req.itc = 0;
 }
+
+enum PageGroup : uint8_t {
+    kPageGroupGlobal = 1,
+    kPageGroupRouting = 2,
+    kPageGroupEngine = 3
+};
 
 static void sclCallback(void* callbackData)
 {
@@ -164,7 +170,7 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     alg->pageDefs[pageIdx] = {
         .name = "Global",
         .numParams = kNumGlobalParams,
-        .group = 0,
+        .group = kPageGroupGlobal,
         .unused = {0, 0},
         .params = globalPageIdx
     };
@@ -183,7 +189,7 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         alg->pageDefs[pageIdx] = {
             .name = chCommonPageNames[ch],
             .numParams = kNumChannelCommonParams,
-            .group = 0,
+            .group = kPageGroupRouting,
             .unused = {0, 0},
             .params = chPageIdx
         };
@@ -199,14 +205,16 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             engPageIdx[i] = (uint8_t)(alg->channels[ch].engineParamBase + i);
 
         _NT_parameterPage engPage;
-        int numEngParams = alg->channels[ch].engine->getPageDefs(
+        (void)alg->channels[ch].engine->getPageDefs(
             &engPage, engPageIdx, alg->channels[ch].engineParamBase);
 
-        // Use the page name from the engine but override with our naming
+        // Use the page name from the engine but override with our naming.
+        // Keep page length fixed to reserved slot count so all engine params
+        // remain reachable even on hosts that snapshot page layout at construct.
         alg->pageDefs[pageIdx] = {
             .name = chEnginePageNames[ch],
-            .numParams = (uint8_t)numEngParams,
-            .group = 0,
+            .numParams = (uint8_t)kMaxEngineParams,
+            .group = kPageGroupEngine,
             .unused = {0, 0},
             .params = engPageIdx
         };

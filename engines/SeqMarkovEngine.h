@@ -17,6 +17,8 @@ public:
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;
+    void uiForceMutate();
+    void uiForceRegenerate();
 
     enum Param {
         kMarkovStyle = 0,
@@ -27,6 +29,8 @@ public:
         kMarkovLength,
         kMarkovDensity,
         kMarkovVelocity,
+        kMarkovMutateSwitch,
+        kMarkovRegenerateSwitch,
         kNumMarkovParams
     };
 
@@ -43,8 +47,10 @@ public:
     };
 
 private:
-    static constexpr int kMaxSteps = 32;
+    static constexpr int kMaxSteps = 64;
     static constexpr int kMaxDegrees = 128;
+    static constexpr int kRhythmPatternLen = 16;
+    static constexpr int kNumRhythmPatterns = 8;
 
     // Style definitions: behavioral parameters that generate NxN matrices
     // for any number of scale degrees
@@ -56,6 +62,7 @@ private:
     };
 
     static const StyleDef kStyleDefs[kNumStyles];
+    static const uint8_t kRhythmPatterns[kNumRhythmPatterns][kRhythmPatternLen];
 
     // Parameters
     int style_;       // 0-7
@@ -63,9 +70,17 @@ private:
     int jumpiness_;   // 0-100
     int range_;       // 1-3
     int mutation_;    // 0-100
-    int length_;      // 1-32
+    int length_;      // 1-64
     int density_;     // 1-100
     int velocity_;    // 0-100
+    int mutateSwitch_;     // 0/1
+    int regenerateSwitch_; // 0/1
+    // Slowly-converging "applied" values used by generator.
+    int appliedStyle_;
+    int appliedEmotion_;
+    int appliedJumpiness_;
+    int appliedRange_;
+    int appliedDensity_;
 
     // Sequence state
     struct Step {
@@ -80,6 +95,8 @@ private:
     int lastDegree_;
     int numDegrees_;
     bool needsRegenerate_;
+    bool rhythmInitialized_;
+    bool regeneratePending_;
 
     // PRNG
     uint32_t rngState_;
@@ -89,6 +106,9 @@ private:
     float computeWeight(int fromDeg, int toDeg, int numDegrees) const;
     float applyEmotion(float weight, int fromDeg, int toDeg) const;
     int pickNextDegree(int currentDeg, int numDegrees);
+    void initializeRhythm();
+    bool driftTowardTargets();
+    void ensureAtLeastOneActive(int length);
     void generateSequence(int numDegrees);
     void mutateSequence(int numDegrees);
 };

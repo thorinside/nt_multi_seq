@@ -17,6 +17,8 @@ public:
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;
+    int previewLength() const;
+    void getPreviewStep(int stepIndex, uint8_t& cvLevel, bool& gateOn) const;
 
     enum Param {
         kAeCvSeq = 0,
@@ -40,7 +42,7 @@ public:
     };
 
 private:
-    static constexpr int kNumSequences = 8;
+    static constexpr int kNumSequences = 20;
     static constexpr int kMaxSteps = 32;
 
     // Parameters
@@ -56,13 +58,13 @@ private:
     int velocity_;    // 0-100
 
     struct VoltageSequence {
-        int16_t steps[kMaxSteps];
-        int currentStep;
+        uint32_t seed;
+        uint8_t currentStep;
     };
 
     struct GateSequence {
-        uint8_t steps[kMaxSteps];
-        int currentStep;
+        uint32_t seed;
+        uint8_t currentStep;
     };
 
     VoltageSequence voltSeqs_[kNumSequences];
@@ -71,6 +73,7 @@ private:
     // PRNG
     uint32_t rngState_;
     uint32_t rng();
+    int16_t sequenceRaw(uint32_t seed, int stepIndex) const;
 
     void getEffectiveRange(float& effMin, float& effMax) const;
     float mapRawToVoltage(int16_t raw, float effMin, float effMax) const;

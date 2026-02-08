@@ -101,6 +101,10 @@ static const char* const routingStrings[] = {
     "CV", "MIDI", nullptr
 };
 
+static const char* const offOnStrings[] = {
+    "Off", "On", nullptr
+};
+
 static const char* const midiDestStrings[] = {
     "Breakout", "Sel.Bus", "USB", "Internal", nullptr
 };

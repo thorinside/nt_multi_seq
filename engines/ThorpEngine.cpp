@@ -111,6 +111,7 @@ ThorpEngine::ThorpEngine()
     , stepCount_(0)
     , localStep_(0)
     , chainPos_(0)
+    , editChainPos_(0)
     , gateActive_(false)
     , lastMidiNote_(60)
     , lastPitch_(0.0f)
@@ -272,6 +273,7 @@ void ThorpEngine::init(uint32_t sampleRate)
     stepCount_ = 0;
     localStep_ = 0;
     chainPos_ = 0;
+    editChainPos_ = 0;
     gateActive_ = false;
 
     numLatchedNotes_ = 0;
@@ -293,6 +295,7 @@ void ThorpEngine::reset()
     stepCount_ = 0;
     localStep_ = 0;
     chainPos_ = 0;
+    editChainPos_ = 0;
     gateActive_ = false;
 }
 
@@ -522,11 +525,95 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
         chainLen_ = clampInt(value, 1, kNumSlots);
         if (chainPos_ >= chainLen_)
             chainPos_ = 0;
+        if (editChainPos_ >= chainLen_)
+            editChainPos_ = chainLen_ - 1;
         break;
 
     default:
         break;
     }
+}
+
+void ThorpEngine::uiSetChainLength(int len)
+{
+    chainLen_ = clampInt(len, 1, kNumSlots);
+    if (chainPos_ >= chainLen_)
+        chainPos_ = chainLen_ - 1;
+    if (editChainPos_ >= chainLen_)
+        editChainPos_ = chainLen_ - 1;
+}
+
+void ThorpEngine::uiSetChainPos(int pos)
+{
+    int len = clampInt(chainLen_, 1, kNumSlots);
+    editChainPos_ = clampInt(pos, 0, len - 1);
+}
+
+int ThorpEngine::uiChainLength() const
+{
+    return clampInt(chainLen_, 1, kNumSlots);
+}
+
+int ThorpEngine::uiChainPos() const
+{
+    int len = clampInt(chainLen_, 1, kNumSlots);
+    return clampInt(editChainPos_, 0, len - 1);
+}
+
+int ThorpEngine::uiChainSlot() const
+{
+    int pos = uiChainPos();
+    return clampInt((int)chain_[pos] + 1, 1, kNumSlots);
+}
+
+void ThorpEngine::uiAdjustChainPos(int delta)
+{
+    if (delta == 0) return;
+    int len = clampInt(chainLen_, 1, kNumSlots);
+    int pos = uiChainPos() + delta;
+    while (pos < 0) pos += len;
+    while (pos >= len) pos -= len;
+    editChainPos_ = pos;
+}
+
+void ThorpEngine::uiAdjustChainSlot(int delta)
+{
+    if (delta == 0) return;
+    int pos = uiChainPos();
+    int slot = (int)chain_[pos] + delta;
+    while (slot < 0) slot += kNumSlots;
+    while (slot >= kNumSlots) slot -= kNumSlots;
+    chain_[pos] = (uint8_t)slot;
+}
+
+void ThorpEngine::uiInsertChainStep()
+{
+    int len = clampInt(chainLen_, 1, kNumSlots);
+    if (len >= kNumSlots)
+        return;
+
+    int pos = uiChainPos();
+    for (int i = len; i > pos + 1; --i)
+        chain_[i] = chain_[i - 1];
+    chain_[pos + 1] = chain_[pos];
+    chainLen_ = len + 1;
+    editChainPos_ = pos + 1;
+}
+
+void ThorpEngine::uiDeleteChainStep()
+{
+    int len = clampInt(chainLen_, 1, kNumSlots);
+    if (len <= 1)
+        return;
+
+    int pos = uiChainPos();
+    for (int i = pos; i < len - 1; ++i)
+        chain_[i] = chain_[i + 1];
+    chainLen_ = len - 1;
+    if (editChainPos_ >= chainLen_)
+        editChainPos_ = chainLen_ - 1;
+    if (chainPos_ >= chainLen_)
+        chainPos_ = chainLen_ - 1;
 }
 
 int ThorpEngine::getParameterDefs(_NT_parameter* defs) const
