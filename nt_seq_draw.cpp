@@ -158,7 +158,7 @@ static void drawFocusEngineDetail(NtSeq* alg, int ch, int y1, int y2)
 
     switch (type) {
     case kEngineThorp: {
-        // Line 1: Pat: <name>  Vel: <name>  Mode: <name>
+        // Line 1: Pat:<name> Mode:<name> Play:<mode>
         int len = 0;
         const char* s;
         s = "Pat:"; while (*s) buf[len++] = *s++;
@@ -177,36 +177,51 @@ static void drawFocusEngineDetail(NtSeq* alg, int ch, int y1, int y2)
         buf[len] = 0;
         NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
 
-        // Mode
+        // Sequence mode
         len = 0;
         s = "Mode:"; while (*s) buf[len++] = *s++;
         buf[len++] = ' ';
-        int modeIdx = alg->v[base + 9]; // kThorpStepMode
+        int modeIdx = alg->v[base + 9]; // kThorpSequenceMode
         const char* const* modeStrings = alg->paramDefs[base + 9].enumStrings;
         if (modeStrings && modeIdx >= 0 && modeStrings[modeIdx]) {
             s = modeStrings[modeIdx];
             while (*s && len < 20) buf[len++] = *s++;
         }
         buf[len] = 0;
-        NT_drawText(140, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+        NT_drawText(108, y1, buf, 8, kNT_textLeft, kNT_textTiny);
 
-        // Line 2: Len:8 Off:0 Rev:Off Mut:25% Gate:85% GLen:50%
+        // Play mode
         len = 0;
-        s = "Len:"; while (*s) buf[len++] = *s++;
+        s = "Play:"; while (*s) buf[len++] = *s++;
+        buf[len++] = ' ';
+        int playModeIdx = alg->v[base + 12]; // kThorpPlayMode
+        const char* const* playModeStrings = alg->paramDefs[base + 12].enumStrings;
+        if (playModeStrings && playModeIdx >= 0 && playModeStrings[playModeIdx]) {
+            s = playModeStrings[playModeIdx];
+            while (*s && len < 16) buf[len++] = *s++;
+        }
+        buf[len] = 0;
+        NT_drawText(190, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+
+        // Line 2: compact performance values
+        len = 0;
+        s = "L:"; while (*s) buf[len++] = *s++;
         len += NT_intToString(buf + len, alg->v[base + 2]); // kThorpLength
-        s = " Off:"; while (*s) buf[len++] = *s++;
+        s = " O:"; while (*s) buf[len++] = *s++;
         len += NT_intToString(buf + len, alg->v[base + 3]); // kThorpOffset
-        s = " Rev:"; while (*s) buf[len++] = *s++;
-        int rev = alg->v[base + 4]; // kThorpReverse
-        s = rev ? "On" : "Off";
-        while (*s) buf[len++] = *s++;
-        s = " Mut:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 10]); // kThorpMutation
-        buf[len++] = '%';
-        s = " Gate:"; while (*s) buf[len++] = *s++;
+        s = " R:"; while (*s) buf[len++] = *s++;
+        buf[len++] = alg->v[base + 4] ? '1' : '0'; // kThorpReverse
+        s = " S:"; while (*s) buf[len++] = *s++;
+        len += NT_intToString(buf + len, alg->v[base + 5]); // kThorpArpSlot
+        s = " C:"; while (*s) buf[len++] = *s++;
+        len += NT_intToString(buf + len, alg->v[base + 13]); // kThorpChainLen
+        s = " G:"; while (*s) buf[len++] = *s++;
         len += NT_intToString(buf + len, alg->v[base + 6]); // kThorpGateProb
         buf[len++] = '%';
-        s = " GLen:"; while (*s) buf[len++] = *s++;
+        s = " V:"; while (*s) buf[len++] = *s++;
+        len += NT_intToString(buf + len, alg->v[base + 10]); // kThorpGlobalVelocity
+        buf[len++] = '%';
+        s = " GL:"; while (*s) buf[len++] = *s++;
         len += NT_intToString(buf + len, alg->v[base + 11]); // kThorpGateLen
         buf[len++] = '%';
         buf[len] = 0;

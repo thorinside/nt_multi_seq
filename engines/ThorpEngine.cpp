@@ -69,13 +69,24 @@ static const char* const kVelPatternStrings[] = {
     nullptr
 };
 
-static const char* const kStepModeStrings[] = {
+static const char* const kSequenceModeStrings[] = {
     "Seq", "PingPong", "RndWalk", "Random", nullptr
 };
 
 static const char* const kReverseStrings[] = {
     "Off", "On", nullptr
 };
+
+static const char* const kPlayModeStrings[] = {
+    "Jam", "Song", nullptr
+};
+
+static inline int clampInt(int v, int lo, int hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
 
 // --- Implementation ---
 
@@ -85,22 +96,29 @@ ThorpEngine::ThorpEngine()
     , length_(8)
     , offset_(0)
     , reverse_(0)
-    , numNotes_(4)
+    , arpSlot_(1)
     , gateProb_(100)
     , octJump_(0)
     , octRange_(1)
-    , stepMode_(kStepSeq)
-    , mutation_(0)
+    , sequenceMode_(kModeSeq)
+    , globalVelocity_(100)
     , gateLen_(50)
+    , playMode_(kPlayJam)
+    , chainLen_(1)
     , currentStep_(-1)
     , pingDir_(1)
-    , velStep_(0)
-    , numLatchedNotes_(0)
-    , numActiveNotes_(0)
-    , patternDirty_(true)
+    , velocityStepCount_(0)
+    , stepCount_(0)
+    , localStep_(0)
+    , chainPos_(0)
+    , gateActive_(false)
+    , lastMidiNote_(60)
+    , lastPitch_(0.0f)
+    , lastVelocity_(2.5f)
     , rngState_(12345)
 {
-    loadPattern();
+    initSlots();
+    loadSelectedSlotParams();
 }
 
 uint32_t ThorpEngine::rng()
@@ -117,13 +135,6 @@ int ThorpEngine::rngRange(int min, int max)
     return min + (int)(rng() % (uint32_t)(max - min + 1));
 }
 
-void ThorpEngine::loadPattern()
-{
-    for (int i = 0; i < kPatternLen; ++i)
-        workingPattern_[i] = kPatterns[pattern_][i];
-    patternDirty_ = false;
-}
-
 void ThorpEngine::addUniqueNote(uint8_t* arr, int& count, uint8_t note)
 {
     for (int i = 0; i < count; ++i) {
@@ -133,7 +144,6 @@ void ThorpEngine::addUniqueNote(uint8_t* arr, int& count, uint8_t note)
     if (count >= kMaxHeldNotes)
         return;
     arr[count++] = note;
-    // Keep ascending order for deterministic arp mapping.
     for (int i = count - 1; i > 0; --i) {
         if (arr[i] < arr[i - 1]) {
             uint8_t t = arr[i];
@@ -157,31 +167,149 @@ void ThorpEngine::removeNote(uint8_t* arr, int& count, uint8_t note)
     }
 }
 
+void ThorpEngine::initSlots()
+{
+    for (int i = 0; i < kNumSlots; ++i) {
+        Slot& s = slots_[i];
+        s.pattern = 0;
+        s.velPattern = 0;
+        s.length = 8;
+        s.offset = 0;
+        s.reverse = 0;
+        s.numNotes = 0;
+        for (int n = 0; n < kMaxHeldNotes; ++n)
+            s.notes[n] = 0;
+        for (int st = 0; st < kPatternLen; ++st)
+            s.velocities[st] = 50;
+
+        chain_[i] = (uint8_t)i;
+    }
+}
+
+void ThorpEngine::refreshSlotVelocity(int slotIndex)
+{
+    slotIndex = clampInt(slotIndex, 0, kNumSlots - 1);
+    Slot& s = slots_[slotIndex];
+    int vp = clampInt((int)s.velPattern, 0, kNumVelPatterns - 1);
+    for (int i = 0; i < kPatternLen; ++i)
+        s.velocities[i] = kVelPatterns[vp][i];
+}
+
+void ThorpEngine::loadSelectedSlotParams()
+{
+    int idx = clampInt(arpSlot_ - 1, 0, kNumSlots - 1);
+    const Slot& s = slots_[idx];
+    pattern_ = clampInt((int)s.pattern, 0, kNumPatterns - 1);
+    velPattern_ = clampInt((int)s.velPattern, 0, kNumVelPatterns - 1);
+    length_ = clampInt((int)s.length, 1, 32);
+    offset_ = clampInt((int)s.offset, 0, kPatternLen - 1);
+    reverse_ = s.reverse ? 1 : 0;
+}
+
+void ThorpEngine::saveSelectedSlotParams()
+{
+    int idx = clampInt(arpSlot_ - 1, 0, kNumSlots - 1);
+    Slot& s = slots_[idx];
+    s.pattern = (uint8_t)clampInt(pattern_, 0, kNumPatterns - 1);
+    s.velPattern = (uint8_t)clampInt(velPattern_, 0, kNumVelPatterns - 1);
+    s.length = (uint8_t)clampInt(length_, 1, 32);
+    s.offset = (uint8_t)clampInt(offset_, 0, kPatternLen - 1);
+    s.reverse = reverse_ ? 1 : 0;
+    refreshSlotVelocity(idx);
+}
+
+void ThorpEngine::copyLatchedToSelectedSlot()
+{
+    int idx = clampInt(arpSlot_ - 1, 0, kNumSlots - 1);
+    Slot& s = slots_[idx];
+    s.numNotes = (uint8_t)clampInt(numLatchedNotes_, 0, kMaxHeldNotes);
+    for (int i = 0; i < s.numNotes; ++i)
+        s.notes[i] = latchedNotes_[i];
+}
+
+void ThorpEngine::advanceSongChain()
+{
+    int len = clampInt(chainLen_, 1, kNumSlots);
+    if (len <= 1) {
+        chainPos_ = 0;
+        return;
+    }
+
+    switch (sequenceMode_) {
+    case kModeSeq:
+        chainPos_ = (chainPos_ + 1) % len;
+        break;
+
+    case kModePingPong:
+        if ((chainPos_ == (len - 1) && pingDir_ > 0) || (chainPos_ == 0 && pingDir_ < 0))
+            pingDir_ = -pingDir_;
+        chainPos_ += pingDir_;
+        chainPos_ = clampInt(chainPos_, 0, len - 1);
+        break;
+
+    case kModeRndWalk:
+        chainPos_ += rngRange(-1, 1);
+        chainPos_ = clampInt(chainPos_, 0, len - 1);
+        break;
+
+    case kModeRandom:
+        chainPos_ = rngRange(0, len - 1);
+        break;
+
+    default:
+        chainPos_ = (chainPos_ + 1) % len;
+        break;
+    }
+}
+
 void ThorpEngine::init(uint32_t sampleRate)
 {
     rngState_ = sampleRate ^ 0xBEEFCAFE;
+
     currentStep_ = -1;
     pingDir_ = 1;
-    velStep_ = 0;
-    loadPattern();
+    velocityStepCount_ = 0;
+    stepCount_ = 0;
+    localStep_ = 0;
+    chainPos_ = 0;
+    gateActive_ = false;
+
+    numLatchedNotes_ = 0;
+    numActiveNotes_ = 0;
+
+    lastPitch_ = 0.0f;
+    lastVelocity_ = 2.5f;
+    lastMidiNote_ = 60;
+
+    initSlots();
+    loadSelectedSlotParams();
 }
 
 void ThorpEngine::reset()
 {
     currentStep_ = -1;
     pingDir_ = 1;
-    velStep_ = 0;
-    loadPattern();
+    velocityStepCount_ = 0;
+    stepCount_ = 0;
+    localStep_ = 0;
+    chainPos_ = 0;
+    gateActive_ = false;
 }
 
 void ThorpEngine::noteOn(uint8_t midiNote, uint8_t velocity)
 {
     (void)velocity;
+
     // Match Lua phrase behavior: first new press clears latched set.
     if (numActiveNotes_ == 0)
         numLatchedNotes_ = 0;
+
     addUniqueNote(activeNotes_, numActiveNotes_, midiNote);
     addUniqueNote(latchedNotes_, numLatchedNotes_, midiNote);
+    copyLatchedToSelectedSlot();
+
+    // Note input forces Jam mode for live performance.
+    playMode_ = kPlayJam;
 }
 
 void ThorpEngine::noteOff(uint8_t midiNote)
@@ -189,164 +317,135 @@ void ThorpEngine::noteOff(uint8_t midiNote)
     removeNote(activeNotes_, numActiveNotes_, midiNote);
 }
 
+void ThorpEngine::noteCvGate(float vOct, bool rising)
+{
+    int midiNote = (int)(vOct * 12.0f + 60.0f);
+    midiNote = clampInt(midiNote, 0, 127);
+
+    if (rising) {
+        addUniqueNote(activeNotes_, numActiveNotes_, (uint8_t)midiNote);
+        addUniqueNote(latchedNotes_, numLatchedNotes_, (uint8_t)midiNote);
+        copyLatchedToSelectedSlot();
+        playMode_ = kPlayJam;
+    } else {
+        removeNote(activeNotes_, numActiveNotes_, (uint8_t)midiNote);
+    }
+}
+
 EngineOutput ThorpEngine::clockTick(const ScaleQuantizer* scale)
 {
-    EngineOutput out = { 0.0f, 0.0f, 5.0f, 60 };
+    EngineOutput out = { lastPitch_, 0.0f, lastVelocity_, (uint8_t)lastMidiNote_ };
 
-    int length = length_;
-    if (length < 1) length = 1;
-    if (length > 32) length = 32;
+    // For non-legato gate lengths, previous note is always released before
+    // the next clock tick.
+    if (gateLen_ < 100)
+        gateActive_ = false;
 
-    // Track whether we wrapped (for mutation)
-    bool wrapped = false;
+    const int velStepIndex = velocityStepCount_ % kPatternLen;
+    velocityStepCount_++;
 
-    // Advance step based on step mode
-    switch (stepMode_) {
-    case kStepSeq:
-        currentStep_++;
-        if (currentStep_ >= length) {
-            currentStep_ = 0;
-            wrapped = true;
+    const Slot* activeSlot = nullptr;
+    int rawNote = -1;
+
+    if (playMode_ == kPlaySong) {
+        int chainLen = clampInt(chainLen_, 1, kNumSlots);
+        int chainIndex = chainPos_ % chainLen;
+        int slotIndex = clampInt((int)chain_[chainIndex], 0, kNumSlots - 1);
+        activeSlot = &slots_[slotIndex];
+
+        int len = clampInt((int)activeSlot->length, 1, 32);
+        int step = localStep_ % len;
+        currentStep_ = step;
+
+        localStep_++;
+        if (localStep_ >= len) {
+            localStep_ = 0;
+            advanceSongChain();
         }
-        break;
 
-    case kStepPingPong:
-        currentStep_ += pingDir_;
-        if (currentStep_ >= length) {
-            currentStep_ = length - 1;
-            pingDir_ = -1;
-            if (length == 1) wrapped = true;
-        } else if (currentStep_ < 0) {
-            currentStep_ = 0;
-            pingDir_ = 1;
-            wrapped = true;
-        }
-        break;
+        int pattern = clampInt((int)activeSlot->pattern, 0, kNumPatterns - 1);
+        int offset = clampInt((int)activeSlot->offset, 0, kPatternLen - 1);
+        int reverse = activeSlot->reverse ? 1 : 0;
 
-    case kStepRndWalk: {
-        int delta = rngRange(-1, 1);
-        currentStep_ += delta;
-        if (currentStep_ >= length) {
-            currentStep_ = length - 1;
-            wrapped = true;
-        } else if (currentStep_ < 0) {
-            currentStep_ = 0;
-            wrapped = true;
-        }
-        break;
-    }
+        int patIndex = (step + offset) % kPatternLen;
+        if (reverse)
+            patIndex = (kPatternLen - 1) - patIndex;
 
-    case kStepRandom:
-        currentStep_ = rngRange(0, length - 1);
-        // No clear loop boundary for random; use probability instead
-        if ((int)(rng() % (uint32_t)length) == 0)
-            wrapped = true;
-        break;
-
-    default:
-        currentStep_ = (currentStep_ + 1) % length;
-        break;
-    }
-
-    // At loop boundary: maybe mutate the working pattern
-    if (wrapped && mutation_ > 0) {
-        if ((int)(rng() % 100) < mutation_) {
-            // Randomize 1-2 steps in the working pattern
-            int numMutations = rngRange(1, 2);
-            for (int m = 0; m < numMutations; ++m) {
-                int idx = rngRange(0, kPatternLen - 1);
-                // Mutate to a random note value (1 to numNotes_) or rest (0)
-                // 85% chance of a note, 15% chance of rest
-                if ((int)(rng() % 100) < 85) {
-                    workingPattern_[idx] = (int8_t)rngRange(1, numNotes_);
-                } else {
-                    workingPattern_[idx] = 0;
-                }
+        int stepValue = kPatterns[pattern][patIndex];
+        if (stepValue != 0 && ((int)(rng() % 100) < gateProb_)) {
+            const uint8_t* notes = activeSlot->notes;
+            int noteCount = activeSlot->numNotes;
+            if (noteCount <= 0 && numLatchedNotes_ > 0) {
+                notes = latchedNotes_;
+                noteCount = numLatchedNotes_;
             }
-        }
-    }
-
-    // Get pattern value at current step with offset and optional reversal
-    int patIdx = currentStep_ % kPatternLen;
-    patIdx = (patIdx + offset_) % kPatternLen;
-    if (reverse_) {
-        patIdx = (kPatternLen - 1) - patIdx;
-    }
-    int8_t patVal = workingPattern_[patIdx];
-
-    // Rest: pattern value 0
-    if (patVal == 0) {
-        out.gate = 0.0f;
-        // Velocity from vel pattern even on rest (some users want vel CV to update)
-        int velIdx = velStep_ % kPatternLen;
-        out.velocity = (float)kVelPatterns[velPattern_][velIdx] / 100.0f * 5.0f;
-        velStep_++;
-        return out;
-    }
-
-    // Gate probability check
-    if (gateProb_ < 100 && (int)(rng() % 100) >= gateProb_) {
-        out.gate = 0.0f;
-        int velIdx = velStep_ % kPatternLen;
-        out.velocity = (float)kVelPatterns[velPattern_][velIdx] / 100.0f * 5.0f;
-        velStep_++;
-        return out;
-    }
-
-    bool hasLatchedNotes = numLatchedNotes_ > 0;
-    int degree = 0;
-    int octShift = 0;
-    int midi = 60;
-    if (hasLatchedNotes) {
-        int noteIdx = (patVal - 1) % numLatchedNotes_;
-        midi = (int)latchedNotes_[noteIdx];
-        if (octJump_ > 0 && (int)(rng() % 100) < octJump_) {
-            int jump = rngRange(-octRange_, octRange_);
-            midi += jump * 12;
-            if (midi < 0) midi = 0;
-            if (midi > 127) midi = 127;
+            if (noteCount > 0)
+                rawNote = notes[(stepValue - 1) % noteCount];
         }
     } else {
-        // Fallback: generated scale degree behavior
-        degree = (patVal - 1) % numNotes_;
-        if (octJump_ > 0 && (int)(rng() % 100) < octJump_) {
-            octShift = rngRange(-octRange_, octRange_);
-            // Avoid 0 shift (that's not really a "jump")
-            if (octShift == 0) octShift = rngRange(0, 1) ? 1 : -1;
-        }
+        activeSlot = &slots_[clampInt(arpSlot_ - 1, 0, kNumSlots - 1)];
+
+        int len = clampInt(length_, 1, 32);
+        int step = stepCount_ % len;
+        currentStep_ = step;
+        stepCount_++;
+
+        int pattern = clampInt(pattern_, 0, kNumPatterns - 1);
+        int offset = clampInt(offset_, 0, kPatternLen - 1);
+        int reverse = reverse_ ? 1 : 0;
+
+        int patIndex = (step + offset) % kPatternLen;
+        if (reverse)
+            patIndex = (kPatternLen - 1) - patIndex;
+
+        int stepValue = kPatterns[pattern][patIndex];
+        if (stepValue != 0 && numLatchedNotes_ > 0 && ((int)(rng() % 100) < gateProb_))
+            rawNote = latchedNotes_[(stepValue - 1) % numLatchedNotes_];
     }
 
-    // Velocity from velocity pattern
-    int velIdx = velStep_ % kPatternLen;
-    out.velocity = (float)kVelPatterns[velPattern_][velIdx] / 100.0f * 5.0f;
-    velStep_++;
+    if (rawNote < 0)
+        return out;
 
-    // Gate on
+    // Global octave jump performance behavior.
+    if (octJump_ > 0 && (int)(rng() % 100) < octJump_) {
+        int jump = rngRange(-octRange_, octRange_);
+        rawNote += jump * 12;
+        rawNote = clampInt(rawNote, 0, 127);
+    }
+
+    int stepVelocity = 50;
+    if (playMode_ == kPlaySong && activeSlot) {
+        stepVelocity = activeSlot->velocities[velStepIndex];
+    } else {
+        stepVelocity = kVelPatterns[clampInt(velPattern_, 0, kNumVelPatterns - 1)][velStepIndex];
+    }
+
+    stepVelocity = (stepVelocity * globalVelocity_) / 100;
+    stepVelocity = clampInt(stepVelocity, 0, 100);
+    float velocityCV = (float)stepVelocity * 0.05f;
+
+    int quantizedMidi = rawNote;
+    float pitch = (float)(rawNote - 60) / 12.0f;
+
+    if (scale && scale->isLoaded()) {
+        pitch = scale->midiNoteToVOct((uint8_t)rawNote, 0);
+        quantizedMidi = (int)(pitch * 12.0f + 60.0f + 0.5f);
+        quantizedMidi = clampInt(quantizedMidi, 0, 127);
+    }
+
+    bool isNewNote = (!gateActive_) || (quantizedMidi != lastMidiNote_);
+    if (!isNewNote)
+        return out;
+
+    out.pitch = pitch;
+    out.velocity = velocityCV;
     out.gate = 5.0f;
+    out.midiNote = (uint8_t)quantizedMidi;
 
-    // Pitch via scale quantizer
-    if (hasLatchedNotes) {
-        if (scale && scale->isLoaded()) {
-            out.pitch = scale->midiNoteToVOct((uint8_t)midi, 0);
-            int qMidi = (int)(out.pitch * 12.0f + 60.0f + 0.5f);
-            if (qMidi < 0) qMidi = 0;
-            if (qMidi > 127) qMidi = 127;
-            out.midiNote = (uint8_t)qMidi;
-        } else {
-            out.pitch = (float)(midi - 60) / 12.0f;
-            out.midiNote = (uint8_t)midi;
-        }
-    } else if (scale && scale->isLoaded()) {
-        out.pitch = scale->quantize(degree, octShift, 0);
-        out.midiNote = scale->scaleDegreeToMidi(degree, octShift + 5, 0);
-    } else {
-        // Fallback: chromatic, each degree = 1 semitone
-        out.pitch = (float)(degree + octShift * 12) / 12.0f;
-        midi = 60 + degree + octShift * 12;
-        if (midi < 0) midi = 0;
-        if (midi > 127) midi = 127;
-        out.midiNote = (uint8_t)midi;
-    }
+    lastPitch_ = pitch;
+    lastVelocity_ = velocityCV;
+    lastMidiNote_ = quantizedMidi;
+    gateActive_ = true;
 
     return out;
 }
@@ -355,55 +454,125 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
 {
     switch (localIndex) {
     case kThorpPattern:
-        pattern_ = value;
-        if (pattern_ < 0) pattern_ = 0;
-        if (pattern_ >= kNumPatterns) pattern_ = kNumPatterns - 1;
-        loadPattern();
+        pattern_ = clampInt(value, 0, kNumPatterns - 1);
+        saveSelectedSlotParams();
         break;
+
     case kThorpVelPattern:
-        velPattern_ = value;
-        if (velPattern_ < 0) velPattern_ = 0;
-        if (velPattern_ >= kNumVelPatterns) velPattern_ = kNumVelPatterns - 1;
+        velPattern_ = clampInt(value, 0, kNumVelPatterns - 1);
+        saveSelectedSlotParams();
         break;
-    case kThorpLength:     length_ = value; break;
-    case kThorpOffset:     offset_ = value; break;
-    case kThorpReverse:    reverse_ = value; break;
-    case kThorpNumNotes:   numNotes_ = value; break;
-    case kThorpGateProb:   gateProb_ = value; break;
-    case kThorpOctJump:    octJump_ = value; break;
-    case kThorpOctRange:   octRange_ = value; break;
-    case kThorpStepMode:   stepMode_ = value; break;
-    case kThorpMutation:   mutation_ = value; break;
-    case kThorpGateLen:    gateLen_ = value; break;
+
+    case kThorpLength:
+        length_ = clampInt(value, 1, 32);
+        saveSelectedSlotParams();
+        break;
+
+    case kThorpOffset:
+        offset_ = clampInt(value, 0, kPatternLen - 1);
+        saveSelectedSlotParams();
+        break;
+
+    case kThorpReverse:
+        reverse_ = value ? 1 : 0;
+        saveSelectedSlotParams();
+        break;
+
+    case kThorpArpSlot:
+        arpSlot_ = clampInt(value, 1, kNumSlots);
+        loadSelectedSlotParams();
+        break;
+
+    case kThorpGateProb:
+        gateProb_ = clampInt(value, 1, 100);
+        break;
+
+    case kThorpOctJump:
+        octJump_ = clampInt(value, 0, 100);
+        break;
+
+    case kThorpOctRange:
+        octRange_ = clampInt(value, 1, 3);
+        break;
+
+    case kThorpSequenceMode:
+        sequenceMode_ = clampInt(value, 0, kNumSequenceModes - 1);
+        break;
+
+    case kThorpGlobalVelocity:
+        globalVelocity_ = clampInt(value, 0, 100);
+        break;
+
+    case kThorpGateLen:
+        gateLen_ = clampInt(value, 1, 100);
+        break;
+
+    case kThorpPlayMode:
+        playMode_ = clampInt(value, 0, kNumPlayModes - 1);
+        if (playMode_ == kPlaySong) {
+            chainPos_ = 0;
+            localStep_ = 0;
+            pingDir_ = 1;
+        } else {
+            numLatchedNotes_ = 0;
+        }
+        break;
+
+    case kThorpChainLen:
+        chainLen_ = clampInt(value, 1, kNumSlots);
+        if (chainPos_ >= chainLen_)
+            chainPos_ = 0;
+        break;
+
+    default:
+        break;
     }
 }
 
 int ThorpEngine::getParameterDefs(_NT_parameter* defs) const
 {
-    defs[kThorpPattern]    = { .name = "Pattern",    .min = 0, .max = kNumPatterns - 1,    .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPatternStrings };
-    defs[kThorpVelPattern] = { .name = "Vel Pat",    .min = 0, .max = kNumVelPatterns - 1, .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kVelPatternStrings };
-    defs[kThorpLength]     = { .name = "Length",     .min = 1, .max = 32,                  .def = 8,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpOffset]     = { .name = "Offset",     .min = 0, .max = 7,                   .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpReverse]    = { .name = "Reverse",    .min = 0, .max = 1,                   .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kReverseStrings };
-    defs[kThorpNumNotes]   = { .name = "Num Notes",  .min = 2, .max = 8,                   .def = 4,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpGateProb]   = { .name = "Gate Prob",  .min = 1, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpOctJump]    = { .name = "Oct Jump",   .min = 0, .max = 100,                 .def = 0,        .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpOctRange]   = { .name = "Oct Range",  .min = 1, .max = 3,                   .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpStepMode]   = { .name = "Step Mode",  .min = 0, .max = kNumStepModes - 1,   .def = kStepSeq, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kStepModeStrings };
-    defs[kThorpMutation]   = { .name = "Mutation",   .min = 0, .max = 100,                 .def = 0,        .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpGateLen]    = { .name = "Gate Len",   .min = 1, .max = 100,                 .def = 50,       .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpPattern]        = { .name = "Pattern",    .min = 0, .max = kNumPatterns - 1,    .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPatternStrings };
+    defs[kThorpVelPattern]     = { .name = "Vel Pat",    .min = 0, .max = kNumVelPatterns - 1, .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kVelPatternStrings };
+    defs[kThorpLength]         = { .name = "Length",     .min = 1, .max = 32,                  .def = 8,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpOffset]         = { .name = "Offset",     .min = 0, .max = 7,                   .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpReverse]        = { .name = "Reverse",    .min = 0, .max = 1,                   .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kReverseStrings };
+    defs[kThorpArpSlot]        = { .name = "Arp Slot",   .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpGateProb]       = { .name = "Gate Prob",  .min = 1, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpOctJump]        = { .name = "Oct Jump",   .min = 0, .max = 100,                 .def = 0,        .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpOctRange]       = { .name = "Oct Range",  .min = 1, .max = 3,                   .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpSequenceMode]   = { .name = "Seq Mode",   .min = 0, .max = kNumSequenceModes - 1, .def = kModeSeq, .unit = kNT_unitEnum,  .scaling = kNT_scalingNone, .enumStrings = kSequenceModeStrings };
+    defs[kThorpGlobalVelocity] = { .name = "Global Vel", .min = 0, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpGateLen]        = { .name = "Gate Len",   .min = 1, .max = 100,                 .def = 50,       .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kThorpPlayMode]       = { .name = "Play Mode",  .min = 0, .max = kNumPlayModes - 1,   .def = kPlayJam, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPlayModeStrings };
+    defs[kThorpChainLen]       = { .name = "Chain Len",  .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
     return kNumThorpParams;
 }
 
-int ThorpEngine::currentStep() const { return currentStep_; }
-int ThorpEngine::sequenceLength() const { return length_; }
+int ThorpEngine::currentStep() const
+{
+    return currentStep_;
+}
+
+int ThorpEngine::sequenceLength() const
+{
+    if (playMode_ == kPlaySong) {
+        int chainLen = clampInt(chainLen_, 1, kNumSlots);
+        int slotIndex = clampInt((int)chain_[chainPos_ % chainLen], 0, kNumSlots - 1);
+        return clampInt((int)slots_[slotIndex].length, 1, 32);
+    }
+    return clampInt(length_, 1, 32);
+}
 
 int ThorpEngine::getStatusText(char* buf, int maxLen) const
 {
-    // Show pattern name abbreviated
-    const char* pat = kPatternStrings[pattern_];
+    if (maxLen <= 0) return 0;
+
     int len = 0;
-    while (*pat && len < maxLen - 1) buf[len++] = *pat++;
+    const char* mode = (playMode_ == kPlaySong) ? "Song" : "Jam";
+    while (*mode && len < maxLen - 1) buf[len++] = *mode++;
+    if (len < maxLen - 2) buf[len++] = ' ';
+    if (len < maxLen - 2) buf[len++] = 'S';
+    if (len < maxLen - 2) len += NT_intToString(buf + len, arpSlot_);
     buf[len] = 0;
     return len;
 }

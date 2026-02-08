@@ -37,6 +37,7 @@ public:
     // Optional hooks for engines that react to MIDI note input directly.
     virtual void noteOn(uint8_t /*midiNote*/, uint8_t /*velocity*/) {}
     virtual void noteOff(uint8_t /*midiNote*/) {}
+    virtual void noteCvGate(float /*vOct*/, bool /*rising*/) {}
 
     // Optional timed-gate behavior. Engines returning true can request that
     // the host hold gate high for a percentage of measured clock period.

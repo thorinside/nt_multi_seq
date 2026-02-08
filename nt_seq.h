@@ -16,8 +16,8 @@ constexpr int kMaxChannels = 4;
 constexpr int kMaxEngineParams = 15;
 
 // Maximum total parameters
-// Global(3) + per-channel(14 common + 15 engine) * 4 = 119
-constexpr int kMaxTotalParams = 3 + kMaxChannels * (14 + kMaxEngineParams);
+// Global(3) + per-channel(16 common + 15 engine) * 4 = 127
+constexpr int kMaxTotalParams = 3 + kMaxChannels * (16 + kMaxEngineParams);
 
 // Maximum pages: 1 global + 2 per channel (common + engine)
 constexpr int kMaxPages = 1 + kMaxChannels * 2;
@@ -52,6 +52,8 @@ enum ChannelParamOffset {
     kChMidiDest,
     kChClockDiv,
     kChScaleEnable,
+    kChNoteGateIn,
+    kChNoteCvIn,
     kNumChannelCommonParams
 };
 
@@ -125,6 +127,7 @@ struct ChannelState {
     // Per-channel clock/reset edge detection
     bool clockHigh;
     bool resetHigh;
+    bool noteGateHigh;
     int clockPeriodSamples;
     int samplesSinceClock;
     int gateSamplesRemaining; // -1=legato hold, 0=off, >0=countdown in samples
@@ -144,6 +147,7 @@ struct ChannelState {
         , enginePageIndex(0)
         , clockHigh(false)
         , resetHigh(false)
+        , noteGateHigh(false)
         , clockPeriodSamples(0)
         , samplesSinceClock(0)
         , gateSamplesRemaining(0)

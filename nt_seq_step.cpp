@@ -52,6 +52,8 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
     struct ChannelBusses {
         float* clock;
         float* reset;
+        float* noteGate;
+        float* noteCv;
         float* pitch;
         float* gate;
         float* velocity;
@@ -67,6 +69,8 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
 
         chBus[ch].clock = busPtr(busFrames, alg->v[base + kChClockIn], numFrames);
         chBus[ch].reset = busPtr(busFrames, alg->v[base + kChResetIn], numFrames);
+        chBus[ch].noteGate = busPtr(busFrames, alg->v[base + kChNoteGateIn], numFrames);
+        chBus[ch].noteCv = busPtr(busFrames, alg->v[base + kChNoteCvIn], numFrames);
 
         int outputMode = alg->v[base + kChRouting];
         chBus[ch].isCvMode = (outputMode == kRoutingCV);
@@ -107,6 +111,19 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                 alg->channels[ch].cachedGate = 0.0f;
                 alg->channels[ch].gateSamplesRemaining = 0;
                 alg->channels[ch].samplesSinceClock = 0;
+            }
+
+            // Optional per-channel note gate capture (for engines like Thorp).
+            if (chBus[ch].noteGate && alg->channels[ch].engine) {
+                bool prevHigh = alg->channels[ch].noteGateHigh;
+                bool high = chBus[ch].noteGate[n] > 1.0f;
+                bool noteRise = high && !prevHigh;
+                bool noteFall = !high && prevHigh;
+                alg->channels[ch].noteGateHigh = high;
+                if (noteRise || noteFall) {
+                    float noteCv = chBus[ch].noteCv ? chBus[ch].noteCv[n] : 0.0f;
+                    alg->channels[ch].engine->noteCvGate(noteCv, noteRise);
+                }
             }
 
             // Per-channel clock edge detection
