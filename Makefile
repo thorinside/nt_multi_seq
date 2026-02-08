@@ -73,17 +73,21 @@ hardware: $(PLUGINS_DIR)/$(PROJECT).o
 
 OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(notdir $(SOURCES)))
 
+# Auto-generate header dependencies (-MMD -MP creates .d files alongside .o files)
+DEPFLAGS = -MMD -MP
+-include $(OBJS:.o=.d)
+
 $(BUILD_DIR)/%.o: %.cpp | $(BUILD_DIR)
-	$(CXX_ARM) $(CXXFLAGS_ARM) $(INCLUDES) -c $< -o $@
+	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.o: engines/%.cpp | $(BUILD_DIR)
-	$(CXX_ARM) $(CXXFLAGS_ARM) $(INCLUDES) -c $< -o $@
+	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.o: scale/%.cpp | $(BUILD_DIR)
-	$(CXX_ARM) $(CXXFLAGS_ARM) $(INCLUDES) -c $< -o $@
+	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.o: clock/%.cpp | $(BUILD_DIR)
-	$(CXX_ARM) $(CXXFLAGS_ARM) $(INCLUDES) -c $< -o $@
+	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
 $(PLUGINS_DIR)/$(PROJECT).o: $(OBJS) | $(PLUGINS_DIR)
 	$(CXX_ARM) -r $(OBJS) -o $@
