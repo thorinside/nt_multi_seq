@@ -15,12 +15,15 @@ constexpr int kMaxChannels = 8;
 // Maximum parameters any single engine can define
 constexpr int kMaxEngineParams = 32;
 
-// Maximum total parameters (upper bound for array sizing)
-// Global(5) + per-channel(15 common + up to 32 engine) * 8 = 381
-constexpr int kMaxTotalParams = 5 + kMaxChannels * (15 + kMaxEngineParams);
+// Per-channel param stride: 15 common + 32 engine slots
+constexpr int kParamsPerChannel = 15 + kMaxEngineParams;
 
-// Maximum pages: 1 global + 2 per channel (common + engine)
-constexpr int kMaxPages = 1 + kMaxChannels * 2;
+// Maximum total parameters (upper bound for array sizing)
+// Global(5) + engine-type-per-channel(8) + per-channel(47) * 8 = 389
+constexpr int kMaxTotalParams = 5 + kMaxChannels + kMaxChannels * kParamsPerChannel;
+
+// Maximum pages: 1 global + 1 engines + 2 per channel (common + engine)
+constexpr int kMaxPages = 1 + 1 + kMaxChannels * 2;
 
 // Maximum page param indices
 constexpr int kMaxPageIndices = kMaxTotalParams;
@@ -58,8 +61,9 @@ enum ChannelParamOffset {
     kNumChannelCommonParams
 };
 
-// --- Engine type enum ---
+// --- Engine type enum (includes None for runtime switching) ---
 enum EngineType {
+    kEngineNone = -1,
     kEngineThorp = 0,
     kEngineSoma,
     kEngineAeSeq,
@@ -84,33 +88,20 @@ enum MidiDest {
 };
 
 // --- Specification ---
-// Spec value: 0=None, 1=Thorp, 2=Soma, 3=AE Seq, 4=Markov
+// Single spec: number of channels (1-8)
 enum SpecIndex {
-    SPEC_SEQ1 = 0,
-    SPEC_SEQ2,
-    SPEC_SEQ3,
-    SPEC_SEQ4,
-    SPEC_SEQ5,
-    SPEC_SEQ6,
-    SPEC_SEQ7,
-    SPEC_SEQ8,
+    SPEC_CHANNELS = 0,
     NUM_SPECS
 };
 
 static const _NT_specification specifications[] = {
-    { .name = "Seq 1", .min = 0, .max = kNumEngineTypes, .def = 2, .type = kNT_typeGeneric },
-    { .name = "Seq 2", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
-    { .name = "Seq 3", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
-    { .name = "Seq 4", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
-    { .name = "Seq 5", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
-    { .name = "Seq 6", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
-    { .name = "Seq 7", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
-    { .name = "Seq 8", .min = 0, .max = kNumEngineTypes, .def = 0, .type = kNT_typeGeneric },
+    { .name = "Channels", .min = 1, .max = 8, .def = 1, .type = kNT_typeGeneric },
 };
 
 // --- Enum string arrays ---
-static const char* const engineTypeStrings[] = {
-    "Thorp", "Soma", "AE Seq", "Markov", nullptr
+// Engine type with None for the runtime param (0=None, 1=Thorp, 2=Soma, 3=AE Seq, 4=Markov)
+static const char* const engineTypeWithNoneStrings[] = {
+    "None", "Thorp", "Soma", "AE Seq", "Markov", nullptr
 };
 
 static const char* const routingStrings[] = {
@@ -140,11 +131,10 @@ struct ChannelState {
     ClockProcessor clockProc;
     uint8_t lastMidiNote;
     bool midiNoteOn;
-    int paramBase;           // Index of first per-channel param in v[]
+    int paramBase;           // Index of first per-channel common param in v[]
     int engineParamBase;     // Index of first engine param in v[]
     int numEngineParams;     // Actual number of engine params (no padding)
     int enginePageIndex;     // Index into pageDefs[] for engine page
-    int specSlot;            // Maps dense channel index back to spec slot 0-7
 
     // Per-channel clock/reset edge detection
     bool clockHigh;
@@ -161,14 +151,13 @@ struct ChannelState {
 
     ChannelState()
         : engine(nullptr)
-        , engineType(kEngineSoma)
+        , engineType(kEngineNone)
         , lastMidiNote(0)
         , midiNoteOn(false)
         , paramBase(0)
         , engineParamBase(0)
         , numEngineParams(0)
         , enginePageIndex(0)
-        , specSlot(0)
         , clockHigh(false)
         , resetHigh(false)
         , noteGateHigh(false)
@@ -217,6 +206,10 @@ struct NtSeq : public _NT_algorithm {
 
     // UI state
     int8_t focusChannel;  // -1 = overview, 0-7 = focused channel
+    bool initDone;        // Set true after first step(); guards param sync during init
+
+    // Re-entrancy guard for engine switching (prevents recursive switches during value resets)
+    bool switchingEngine;
 
     // Engine memory pool (engines placed here via placement new)
     // Must be aligned for ARM strd instructions used by engine constructors.

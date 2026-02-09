@@ -3,6 +3,9 @@
 
 #include "SequencerEngine.h"
 
+class _NT_jsonStream;
+class _NT_jsonParse;
+
 class ThorpEngine : public SequencerEngine {
 public:
     ThorpEngine();
@@ -14,6 +17,7 @@ public:
     int getParameterDefs(_NT_parameter* defs) const override;
     int getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const override;
     const char* name() const override { return "Thorp"; }
+    void drawFocusDetail(int y1, int y2) const override;
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;
@@ -24,15 +28,19 @@ public:
     int gateLengthPercent() const override { return gateLen_; }
     int midiInputChannel() const override;
     // Focus-page song editing helpers.
-    void uiSetChainLength(int len);
-    void uiSetChainPos(int pos);
     int uiChainLength() const;
-    int uiChainPos() const;
-    int uiChainSlot() const;
-    void uiAdjustChainPos(int delta);
-    void uiAdjustChainSlot(int delta);
-    void uiInsertChainStep();
-    void uiDeleteChainStep();
+    int uiChainSlotAt(int pos) const;
+    // Playback state getters for Song mode focus display.
+    int uiPlayingChainPos() const;
+    int uiPlayingSlot() const;
+
+    // Serialisation.
+    void serialise(_NT_jsonStream& stream) const;
+    bool deserialise(_NT_jsonParse& parse);
+
+    // Getter for loaded slot params (for param sync after Arp Slot change).
+    void getLoadedSlotParams(int16_t& pattern, int16_t& velPattern,
+                             int16_t& length, int16_t& offset, int16_t& reverse) const;
 
     enum Param {
         kThorpPattern = 0,
@@ -108,7 +116,6 @@ private:
     int stepCount_;
     int localStep_;
     int chainPos_;
-    int editChainPos_;
     bool gateActive_;
     int lastMidiNote_;
     float lastPitch_;

@@ -206,6 +206,33 @@ int SomaEngine::getStatusText(char* buf, int maxLen) const
     return len;
 }
 
+void SomaEngine::drawFocusDetail(int y1, int y2) const
+{
+    char buf[64];
+    int len = 0;
+    const char* s;
+
+    // Line 1: Oct Spread: 50%  Note Mut: 70%
+    s = "Oct Spread:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, octaveSpread_);
+    buf[len++] = '%';
+    s = "  Note Mut:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, noteMutate_);
+    buf[len++] = '%';
+    buf[len] = 0;
+    NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+
+    // Line 2: Gate Mut: 80%  Length: 8
+    len = 0;
+    s = "Gate Mut:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, gateMutate_);
+    buf[len++] = '%';
+    s = "  Length:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, length_);
+    buf[len] = 0;
+    NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
+}
+
 int SomaEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
 {
     for (int i = 0; i < kNumSomaParams; ++i)

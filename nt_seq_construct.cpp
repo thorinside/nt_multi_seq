@@ -20,7 +20,7 @@ static_assert(SomaEngine::kNumSomaParams <= kMaxEngineParams, "SomaEngine has to
 static_assert(AeSequencerEngine::kNumAeParams <= kMaxEngineParams, "AeSequencerEngine has too many params");
 static_assert(SeqMarkovEngine::kNumMarkovParams <= kMaxEngineParams, "SeqMarkovEngine has too many params");
 static_assert(ThorpEngine::kNumThorpParams <= kMaxEngineParams, "ThorpEngine has too many params");
-static_assert(ARRAY_SIZE(specifications) == kMaxChannels, "specifications array must match kMaxChannels");
+static_assert(ARRAY_SIZE(specifications) == NUM_SPECS, "specifications array must match NUM_SPECS");
 
 // Per-channel common parameters (static definitions as templates)
 // Max bus index — NT_PARAMETER_IO hardcodes 28; override to match current AUX bus count.
@@ -60,51 +60,29 @@ static const _NT_parameter globalParams[] = {
 };
 static_assert(sizeof(globalParams) / sizeof(globalParams[0]) == kNumGlobalParams, "Global param count mismatch");
 
-// Helper to create engine instance
-static SequencerEngine* createEngine(EngineType type, uint8_t* mem)
-{
-    switch (type) {
-    case kEngineSoma:
-        return new (mem) SomaEngine();
-    case kEngineAeSeq:
-        return new (mem) AeSequencerEngine();
-    case kEngineSeqMarkov:
-        return new (mem) SeqMarkovEngine();
-    case kEngineThorp:
-        return new (mem) ThorpEngine();
-    default:
-        return new (mem) SomaEngine(); // Fallback to Soma
-    }
-}
+// Placeholder parameter for greyed-out engine slots
+static const _NT_parameter placeholderParam = {
+    .name = "-", .min = 0, .max = 0, .def = 0, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr
+};
 
-// Convert spec value to engine type. Returns -1 for None (spec=0).
-static int engineTypeFromSpec(int32_t specValue)
-{
-    if (specValue <= 0 || specValue > kNumEngineTypes) return -1;
-    return specValue - 1;
-}
+// Engine Type parameter template (used for each channel on the Engines page)
+static const _NT_parameter engineTypeParam = {
+    .name = "Engine", .min = 0, .max = kNumEngineTypes, .def = 0,
+    .unit = kNT_unitEnum, .scaling = 0, .enumStrings = engineTypeWithNoneStrings
+};
 
-// Count active (non-None) channels from specs
-static int countActiveChannels(const int32_t* specifications)
-{
-    int count = 0;
-    for (int i = 0; i < kMaxChannels; ++i) {
-        if (specifications[SPEC_SEQ1 + i] > 0)
-            count++;
-    }
-    return count;
-}
+enum PageGroup : uint8_t {
+    kPageGroupGlobal = 1,
+    kPageGroupEngines = 2,
+    kPageGroupRouting = 3,
+    kPageGroupEngine = 4
+};
 
-// Engine name lookup for page naming
-static const char* engineName(EngineType type)
+static void sclCallback(void* callbackData)
 {
-    switch (type) {
-    case kEngineThorp:     return "Thorp";
-    case kEngineSoma:      return "Soma";
-    case kEngineAeSeq:     return "AE Seq";
-    case kEngineSeqMarkov: return "Markov";
-    default:               return "?";
-    }
+    NtSeq* pThis = (NtSeq*)callbackData;
+    pThis->awaitingCallback = false;
+    pThis->scaleDirty = true;
 }
 
 // Copy string, return chars written (no null terminator added)
@@ -120,11 +98,12 @@ static int strCopy(char* dst, const char* src, int maxLen)
 
 void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specifications)
 {
-    int numChannels = countActiveChannels(specifications);
+    int numChannels = specifications[SPEC_CHANNELS];
     if (numChannels < 1) numChannels = 1;
+    if (numChannels > kMaxChannels) numChannels = kMaxChannels;
 
-    int paramsPerChannel = kNumChannelCommonParams + kMaxEngineParams;
-    int totalParams = kNumGlobalParams + numChannels * paramsPerChannel;
+    // Global + engine-type-per-channel + per-channel(common + engine slots)
+    int totalParams = kNumGlobalParams + numChannels + numChannels * kParamsPerChannel;
 
     req.numParameters = totalParams;
     req.sram = sizeof(NtSeq);
@@ -133,30 +112,11 @@ void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specif
     req.itc = 0;
 }
 
-enum PageGroup : uint8_t {
-    kPageGroupGlobal = 1,
-    kPageGroupRouting = 2,
-    kPageGroupEngine = 3
-};
-
-static void sclCallback(void* callbackData)
-{
-    NtSeq* pThis = (NtSeq*)callbackData;
-    pThis->awaitingCallback = false;
-    pThis->scaleDirty = true;
-}
-
 _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorithmRequirements& req, const int32_t* specifications)
 {
-    // Count active channels from specs
-    int numChannels = countActiveChannels(specifications);
+    int numChannels = specifications[SPEC_CHANNELS];
     if (numChannels < 1) numChannels = 1;
-
-    // Validate against req (the framework allocated based on calculateRequirements)
-    int paramsPerChannel = kNumChannelCommonParams + kMaxEngineParams;
-    int reqChannels = (int)((req.numParameters - kNumGlobalParams) / paramsPerChannel);
-    if (reqChannels > 0 && reqChannels < numChannels)
-        numChannels = reqChannels;
+    if (numChannels > kMaxChannels) numChannels = kMaxChannels;
 
     NtSeq* alg = new (ptrs.sram) NtSeq();
     alg->numChannels = numChannels;
@@ -165,20 +125,8 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     alg->awaitingCallback = false;
     alg->scaleDirty = false;
     alg->focusChannel = -1;
-
-    // --- Determine engine types and build dense channel array ---
-    // Count engine type occurrences for page name disambiguation
-    int engineCount[kNumEngineTypes] = {};
-    int denseIdx = 0;
-    for (int slot = 0; slot < kMaxChannels && denseIdx < numChannels; ++slot) {
-        int et = engineTypeFromSpec(specifications[SPEC_SEQ1 + slot]);
-        if (et < 0) continue;
-        engineCount[et]++;
-        denseIdx++;
-    }
-
-    // Track per-type instance number during page name building
-    int engineInstance[kNumEngineTypes] = {};
+    alg->initDone = false;
+    alg->switchingEngine = false;
 
     // --- Build parameter definitions ---
     int p = 0;
@@ -187,75 +135,37 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     memcpy(&alg->paramDefs[p], globalParams, sizeof(globalParams));
     p += kNumGlobalParams;
 
-    // Per-channel params — iterate spec slots, skip None
-    int ch = 0;
-    int pageNameIdx = 0;
-    for (int slot = 0; slot < kMaxChannels && ch < numChannels; ++slot) {
-        int et = engineTypeFromSpec(specifications[SPEC_SEQ1 + slot]);
-        if (et < 0) continue;
+    // Engine Type params (one per channel) — these go on the "Engines" page
+    int engineTypeBase = p;
+    for (int ch = 0; ch < numChannels; ++ch) {
+        alg->paramDefs[p] = engineTypeParam;
+        p++;
+    }
 
-        EngineType channelEngineType = (EngineType)et;
-        alg->channels[ch].specSlot = slot;
+    // Per-channel params: 15 common + 32 engine slots
+    for (int ch = 0; ch < numChannels; ++ch) {
         alg->channels[ch].paramBase = p;
 
         // Copy common channel params
         memcpy(&alg->paramDefs[p], channelCommonParams, sizeof(channelCommonParams));
 
         // Per-channel CV output defaults:
-        // ch0: gate=14 pitch=15 vel=16, ch1: 17/18/19, etc.
+        // ch0: gate=15 pitch=16 vel=17, ch1: 18/19/20, etc.
         alg->paramDefs[p + kChGateOut].def = 15 + ch * 3;
-        alg->paramDefs[p + kChCvOut].def  = 16 + ch * 3;
-        alg->paramDefs[p + kChVelOut].def = 17 + ch * 3;
+        alg->paramDefs[p + kChCvOut].def   = 16 + ch * 3;
+        alg->paramDefs[p + kChVelOut].def  = 17 + ch * 3;
 
         p += kNumChannelCommonParams;
 
-        // Engine-specific params
+        // Engine param slots — all placeholders (greyed out for None)
         alg->channels[ch].engineParamBase = p;
-        alg->channels[ch].engineType = channelEngineType;
+        alg->channels[ch].numEngineParams = kMaxEngineParams;
+        alg->channels[ch].engineType = kEngineNone;
+        alg->channels[ch].engine = nullptr;
 
-        // Create engine
-        uint8_t* engineMem = alg->enginePool + ch * 2048;
-        alg->channels[ch].engine = createEngine(channelEngineType, engineMem);
-        alg->channels[ch].engine->init(NT_globals.sampleRate);
-
-        // Fill engine parameter slots — only actual params, no padding
-        _NT_parameter engineDefs[kMaxEngineParams];
-        int numEngineDefs = alg->channels[ch].engine->getParameterDefs(engineDefs);
-        alg->channels[ch].numEngineParams = numEngineDefs;
-
-        for (int i = 0; i < numEngineDefs; ++i)
-            alg->paramDefs[p + i] = engineDefs[i];
-        p += numEngineDefs;
-
-        // Build page names into pageNameBufs
-        const char* eName = engineName(channelEngineType);
-        int inst = engineInstance[channelEngineType]++;
-        bool needNumber = (engineCount[channelEngineType] > 1);
-
-        // Routing page name: "<Engine>[ N] Routing"
-        {
-            char* buf = alg->pageNameBufs[pageNameIdx];
-            int len = strCopy(buf, eName, 20);
-            if (needNumber) {
-                buf[len++] = ' ';
-                len += NT_intToString(buf + len, inst + 1);
-            }
-            len += strCopy(buf + len, " Routing", 23 - len);
-            buf[len] = 0;
-        }
-        pageNameIdx++;
-
-        // Engine page name: "<Engine>[ N]"
-        {
-            char* buf = alg->pageNameBufs[pageNameIdx];
-            int len = strCopy(buf, eName, 20);
-            if (needNumber) {
-                buf[len++] = ' ';
-                len += NT_intToString(buf + len, inst + 1);
-            }
-            buf[len] = 0;
-        }
-        pageNameIdx++;
+        for (int i = 0; i < kMaxEngineParams; ++i)
+            alg->paramDefs[p + i] = placeholderParam;
+        p += kMaxEngineParams;
 
         // Initialize clock processor
         alg->channels[ch].clockProc.setDivider(1);
@@ -266,8 +176,6 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         alg->channels[ch].gateSamplesRemaining = 0;
         alg->channels[ch].lastMidiNote = 0;
         alg->channels[ch].midiNoteOn = false;
-
-        ch++;
     }
 
     alg->numParams = p;
@@ -290,14 +198,45 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     idxOffset += kNumGlobalParams;
     pageIdx++;
 
+    // Page: Engines (one Engine Type param per channel)
+    {
+        uint8_t* enginesPageIdx = &alg->pageIndices[idxOffset];
+        for (int ch = 0; ch < numChannels; ++ch)
+            enginesPageIdx[ch] = (uint8_t)(engineTypeBase + ch);
+        alg->pageDefs[pageIdx] = {
+            .name = "Engines",
+            .numParams = (uint8_t)numChannels,
+            .group = kPageGroupEngines,
+            .unused = {0, 0},
+            .params = enginesPageIdx
+        };
+        idxOffset += numChannels;
+        pageIdx++;
+    }
+
     // Per-channel pages
-    for (int c = 0; c < (int)alg->numChannels; ++c) {
-        int nameBufBase = c * 2;
+    for (int ch = 0; ch < numChannels; ++ch) {
+        int nameBufBase = ch * 2;
+
+        // Build initial page names: "Ch N Routing" and "Ch N"
+        {
+            char* buf = alg->pageNameBufs[nameBufBase];
+            int len = strCopy(buf, "Ch ", 3);
+            len += NT_intToString(buf + len, ch + 1);
+            len += strCopy(buf + len, " Routing", 23 - len);
+            buf[len] = 0;
+        }
+        {
+            char* buf = alg->pageNameBufs[nameBufBase + 1];
+            int len = strCopy(buf, "Ch ", 3);
+            len += NT_intToString(buf + len, ch + 1);
+            buf[len] = 0;
+        }
 
         // Channel routing page
         uint8_t* chPageIdx = &alg->pageIndices[idxOffset];
         for (int i = 0; i < kNumChannelCommonParams; ++i)
-            chPageIdx[i] = (uint8_t)(alg->channels[c].paramBase + i);
+            chPageIdx[i] = (uint8_t)(alg->channels[ch].paramBase + i);
         alg->pageDefs[pageIdx] = {
             .name = alg->pageNameBufs[nameBufBase],
             .numParams = kNumChannelCommonParams,
@@ -308,25 +247,20 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         idxOffset += kNumChannelCommonParams;
         pageIdx++;
 
-        // Channel engine page — only actual engine params
-        int numEng = alg->channels[c].numEngineParams;
+        // Channel engine page — all 32 slots (greyed out initially for None)
         uint8_t* engPageIdx = &alg->pageIndices[idxOffset];
-        for (int i = 0; i < numEng; ++i)
-            engPageIdx[i] = (uint8_t)(alg->channels[c].engineParamBase + i);
-
-        _NT_parameterPage engPage;
-        (void)alg->channels[c].engine->getPageDefs(
-            &engPage, engPageIdx, alg->channels[c].engineParamBase);
+        for (int i = 0; i < kMaxEngineParams; ++i)
+            engPageIdx[i] = (uint8_t)(alg->channels[ch].engineParamBase + i);
 
         alg->pageDefs[pageIdx] = {
             .name = alg->pageNameBufs[nameBufBase + 1],
-            .numParams = (uint8_t)numEng,
+            .numParams = (uint8_t)kMaxEngineParams,
             .group = kPageGroupEngine,
             .unused = {0, 0},
             .params = engPageIdx
         };
-        alg->channels[c].enginePageIndex = pageIdx;
-        idxOffset += numEng;
+        alg->channels[ch].enginePageIndex = pageIdx;
+        idxOffset += kMaxEngineParams;
         pageIdx++;
     }
 
@@ -348,14 +282,19 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     alg->sclRequest.callback = sclCallback;
     alg->sclRequest.callbackData = alg;
 
-    // Gray out MIDI params initially (CV mode default)
+    // Gray out MIDI params initially (CV mode default) and all engine slots (None)
     int algIdx = NT_algorithmIndex(static_cast<const _NT_algorithm*>(alg));
     if (algIdx >= 0) {
         uint32_t paramOffset = NT_parameterOffset();
-        for (int c = 0; c < (int)alg->numChannels; ++c) {
-            int base = alg->channels[c].paramBase;
+        for (int ch = 0; ch < numChannels; ++ch) {
+            int base = alg->channels[ch].paramBase;
             NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiChannel) + paramOffset, true);
             NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiDest) + paramOffset, true);
+
+            // Grey out all engine param slots (None engine)
+            int engBase = alg->channels[ch].engineParamBase;
+            for (int i = 0; i < kMaxEngineParams; ++i)
+                NT_setParameterGrayedOut(algIdx, (uint32_t)(engBase + i) + paramOffset, true);
         }
     }
 

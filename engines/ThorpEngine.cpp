@@ -1,5 +1,6 @@
 #include "ThorpEngine.h"
 #include "../scale/ScaleQuantizer.h"
+#include <distingnt/serialisation.h>
 
 // --- Static pattern data (shared across all instances, no per-instance cost) ---
 
@@ -112,7 +113,6 @@ ThorpEngine::ThorpEngine()
     , stepCount_(0)
     , localStep_(0)
     , chainPos_(0)
-    , editChainPos_(0)
     , gateActive_(false)
     , lastMidiNote_(60)
     , lastPitch_(0.0f)
@@ -206,6 +206,10 @@ void ThorpEngine::loadSelectedSlotParams()
     length_ = clampInt((int)s.length, 1, 32);
     offset_ = clampInt((int)s.offset, 0, kPatternLen - 1);
     reverse_ = s.reverse ? 1 : 0;
+    // Load saved notes so Jam mode can play them after slot switch / preset load
+    numLatchedNotes_ = clampInt((int)s.numNotes, 0, kMaxHeldNotes);
+    for (int i = 0; i < numLatchedNotes_; ++i)
+        latchedNotes_[i] = s.notes[i];
 }
 
 void ThorpEngine::saveSelectedSlotParams()
@@ -274,7 +278,6 @@ void ThorpEngine::init(uint32_t sampleRate)
     stepCount_ = 0;
     localStep_ = 0;
     chainPos_ = 0;
-    editChainPos_ = 0;
     gateActive_ = false;
 
     numLatchedNotes_ = 0;
@@ -296,7 +299,6 @@ void ThorpEngine::reset()
     stepCount_ = 0;
     localStep_ = 0;
     chainPos_ = 0;
-    editChainPos_ = 0;
     gateActive_ = false;
 }
 
@@ -485,6 +487,8 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
     case kThorpArpSlot:
         arpSlot_ = clampInt(value, 1, kNumSlots);
         loadSelectedSlotParams();
+        // Write current slot into chain at the position indicated by chainLen_
+        chain_[clampInt(chainLen_ - 1, 0, kNumSlots - 1)] = (uint8_t)clampInt(arpSlot_ - 1, 0, kNumSlots - 1);
         break;
 
     case kThorpGateProb:
@@ -526,8 +530,6 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
         chainLen_ = clampInt(value, 1, kNumSlots);
         if (chainPos_ >= chainLen_)
             chainPos_ = 0;
-        if (editChainPos_ >= chainLen_)
-            editChainPos_ = chainLen_ - 1;
         break;
 
     case kThorpMidiInCh:
@@ -539,86 +541,39 @@ void ThorpEngine::parameterChanged(int localIndex, int16_t value)
     }
 }
 
-void ThorpEngine::uiSetChainLength(int len)
-{
-    chainLen_ = clampInt(len, 1, kNumSlots);
-    if (chainPos_ >= chainLen_)
-        chainPos_ = chainLen_ - 1;
-    if (editChainPos_ >= chainLen_)
-        editChainPos_ = chainLen_ - 1;
-}
-
-void ThorpEngine::uiSetChainPos(int pos)
-{
-    int len = clampInt(chainLen_, 1, kNumSlots);
-    editChainPos_ = clampInt(pos, 0, len - 1);
-}
-
 int ThorpEngine::uiChainLength() const
 {
     return clampInt(chainLen_, 1, kNumSlots);
 }
 
-int ThorpEngine::uiChainPos() const
+int ThorpEngine::uiChainSlotAt(int pos) const
 {
     int len = clampInt(chainLen_, 1, kNumSlots);
-    return clampInt(editChainPos_, 0, len - 1);
-}
-
-int ThorpEngine::uiChainSlot() const
-{
-    int pos = uiChainPos();
+    pos = clampInt(pos, 0, len - 1);
     return clampInt((int)chain_[pos] + 1, 1, kNumSlots);
 }
 
-void ThorpEngine::uiAdjustChainPos(int delta)
-{
-    if (delta == 0) return;
-    int len = clampInt(chainLen_, 1, kNumSlots);
-    int pos = uiChainPos() + delta;
-    while (pos < 0) pos += len;
-    while (pos >= len) pos -= len;
-    editChainPos_ = pos;
-}
-
-void ThorpEngine::uiAdjustChainSlot(int delta)
-{
-    if (delta == 0) return;
-    int pos = uiChainPos();
-    int slot = (int)chain_[pos] + delta;
-    while (slot < 0) slot += kNumSlots;
-    while (slot >= kNumSlots) slot -= kNumSlots;
-    chain_[pos] = (uint8_t)slot;
-}
-
-void ThorpEngine::uiInsertChainStep()
+int ThorpEngine::uiPlayingChainPos() const
 {
     int len = clampInt(chainLen_, 1, kNumSlots);
-    if (len >= kNumSlots)
-        return;
-
-    int pos = uiChainPos();
-    for (int i = len; i > pos + 1; --i)
-        chain_[i] = chain_[i - 1];
-    chain_[pos + 1] = chain_[pos];
-    chainLen_ = len + 1;
-    editChainPos_ = pos + 1;
+    return clampInt(chainPos_, 0, len - 1);
 }
 
-void ThorpEngine::uiDeleteChainStep()
+int ThorpEngine::uiPlayingSlot() const
 {
     int len = clampInt(chainLen_, 1, kNumSlots);
-    if (len <= 1)
-        return;
+    int idx = clampInt((int)chain_[chainPos_ % len], 0, kNumSlots - 1);
+    return idx + 1;
+}
 
-    int pos = uiChainPos();
-    for (int i = pos; i < len - 1; ++i)
-        chain_[i] = chain_[i + 1];
-    chainLen_ = len - 1;
-    if (editChainPos_ >= chainLen_)
-        editChainPos_ = chainLen_ - 1;
-    if (chainPos_ >= chainLen_)
-        chainPos_ = chainLen_ - 1;
+void ThorpEngine::getLoadedSlotParams(int16_t& pattern, int16_t& velPattern,
+                                       int16_t& length, int16_t& offset, int16_t& reverse) const
+{
+    pattern = (int16_t)pattern_;
+    velPattern = (int16_t)velPattern_;
+    length = (int16_t)length_;
+    offset = (int16_t)offset_;
+    reverse = (int16_t)reverse_;
 }
 
 int ThorpEngine::getParameterDefs(_NT_parameter* defs) const
@@ -670,6 +625,84 @@ int ThorpEngine::getStatusText(char* buf, int maxLen) const
     return len;
 }
 
+void ThorpEngine::drawFocusDetail(int y1, int y2) const
+{
+    char buf[64];
+    int len = 0;
+    const char* s;
+
+    // Line 1: Play mode, Slot, Step/Length, Seq mode
+    s = kPlayModeStrings[playMode_];
+    if (s) while (*s && len < 10) buf[len++] = *s++;
+
+    s = "  Slot:"; while (*s) buf[len++] = *s++;
+    if (playMode_ == kPlaySong)
+        len += NT_intToString(buf + len, uiPlayingSlot());
+    else
+        len += NT_intToString(buf + len, arpSlot_);
+
+    s = "  Step:"; while (*s) buf[len++] = *s++;
+    int step = currentStep();
+    if (step >= 0)
+        len += NT_intToString(buf + len, step + 1);
+    else
+        buf[len++] = '0';
+    buf[len++] = '/';
+    len += NT_intToString(buf + len, sequenceLength());
+
+    s = "  Seq:"; while (*s) buf[len++] = *s++;
+    s = kSequenceModeStrings[sequenceMode_];
+    if (s) while (*s && len < 55) buf[len++] = *s++;
+    buf[len] = 0;
+    NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+
+    // Line 2: Chain visualization with current position bracketed
+    len = 0;
+    s = "Chain"; while (*s) buf[len++] = *s++;
+    int chainLength = uiChainLength();
+    int cursorPos;
+    if (playMode_ == kPlaySong)
+        cursorPos = uiPlayingChainPos();
+    else
+        cursorPos = chainLength - 1;
+
+    buf[len++] = '[';
+    len += NT_intToString(buf + len, chainLength);
+    buf[len++] = ']';
+    buf[len++] = ':';
+
+    int windowStart = 0;
+    int windowEnd = chainLength;
+    const int maxVisible = 10;
+    if (chainLength > maxVisible) {
+        windowStart = cursorPos - maxVisible / 2;
+        if (windowStart < 0) windowStart = 0;
+        windowEnd = windowStart + maxVisible;
+        if (windowEnd > chainLength) {
+            windowEnd = chainLength;
+            windowStart = windowEnd - maxVisible;
+            if (windowStart < 0) windowStart = 0;
+        }
+        if (windowStart > 0 && len < 56) {
+            s = ".."; while (*s && len < 56) buf[len++] = *s++;
+        }
+    }
+
+    for (int i = windowStart; i < windowEnd && len < 56; ++i) {
+        buf[len++] = ' ';
+        if (i == cursorPos && len < 55)
+            buf[len++] = '[';
+        len += NT_intToString(buf + len, uiChainSlotAt(i));
+        if (i == cursorPos && len < 58)
+            buf[len++] = ']';
+    }
+    if (windowEnd < chainLength && len < 58) {
+        s = " .."; while (*s && len < 60) buf[len++] = *s++;
+    }
+    buf[len] = 0;
+    NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
+}
+
 int ThorpEngine::midiInputChannel() const
 {
     return midiInCh_;  // 0=omni, 1-16=specific channel
@@ -686,4 +719,118 @@ int ThorpEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int base
     page->unused[1] = 0;
     page->params = indices;
     return kNumThorpParams;
+}
+
+void ThorpEngine::serialise(_NT_jsonStream& stream) const
+{
+    // Chain order (16 uint8_t values, 0-indexed)
+    stream.addMemberName("chain");
+    stream.openArray();
+    for (int i = 0; i < kNumSlots; ++i)
+        stream.addNumber((int)chain_[i]);
+    stream.closeArray();
+
+    // Slot data
+    stream.addMemberName("slots");
+    stream.openArray();
+    for (int i = 0; i < kNumSlots; ++i) {
+        const Slot& s = slots_[i];
+        stream.openObject();
+        stream.addMemberName("p");
+        stream.addNumber((int)s.pattern);
+        stream.addMemberName("v");
+        stream.addNumber((int)s.velPattern);
+        stream.addMemberName("l");
+        stream.addNumber((int)s.length);
+        stream.addMemberName("o");
+        stream.addNumber((int)s.offset);
+        stream.addMemberName("r");
+        stream.addNumber((int)s.reverse);
+        stream.addMemberName("n");
+        stream.addNumber((int)s.numNotes);
+        stream.addMemberName("notes");
+        stream.openArray();
+        for (int j = 0; j < s.numNotes; ++j)
+            stream.addNumber((int)s.notes[j]);
+        stream.closeArray();
+        stream.closeObject();
+    }
+    stream.closeArray();
+}
+
+bool ThorpEngine::deserialise(_NT_jsonParse& parse)
+{
+    int numMembers;
+    if (!parse.numberOfObjectMembers(numMembers))
+        return false;
+
+    for (int m = 0; m < numMembers; ++m) {
+        if (parse.matchName("chain")) {
+            int numElements;
+            if (!parse.numberOfArrayElements(numElements))
+                return false;
+            for (int i = 0; i < numElements; ++i) {
+                int val;
+                if (!parse.number(val))
+                    return false;
+                if (i < kNumSlots)
+                    chain_[i] = (uint8_t)clampInt(val, 0, kNumSlots - 1);
+            }
+        } else if (parse.matchName("slots")) {
+            int numSlots;
+            if (!parse.numberOfArrayElements(numSlots))
+                return false;
+            for (int i = 0; i < numSlots; ++i) {
+                int numFields;
+                if (!parse.numberOfObjectMembers(numFields))
+                    return false;
+                Slot s = {};
+                s.length = 8;
+                for (int f = 0; f < numFields; ++f) {
+                    int val;
+                    if (parse.matchName("p")) {
+                        if (!parse.number(val)) return false;
+                        s.pattern = (uint8_t)clampInt(val, 0, kNumPatterns - 1);
+                    } else if (parse.matchName("v")) {
+                        if (!parse.number(val)) return false;
+                        s.velPattern = (uint8_t)clampInt(val, 0, kNumVelPatterns - 1);
+                    } else if (parse.matchName("l")) {
+                        if (!parse.number(val)) return false;
+                        s.length = (uint8_t)clampInt(val, 1, 32);
+                    } else if (parse.matchName("o")) {
+                        if (!parse.number(val)) return false;
+                        s.offset = (uint8_t)clampInt(val, 0, kPatternLen - 1);
+                    } else if (parse.matchName("r")) {
+                        if (!parse.number(val)) return false;
+                        s.reverse = val ? 1 : 0;
+                    } else if (parse.matchName("n")) {
+                        if (!parse.number(val)) return false;
+                        s.numNotes = (uint8_t)clampInt(val, 0, kMaxHeldNotes);
+                    } else if (parse.matchName("notes")) {
+                        int numNotes;
+                        if (!parse.numberOfArrayElements(numNotes))
+                            return false;
+                        for (int j = 0; j < numNotes; ++j) {
+                            int note;
+                            if (!parse.number(note)) return false;
+                            if (j < kMaxHeldNotes)
+                                s.notes[j] = (uint8_t)clampInt(note, 0, 127);
+                        }
+                    } else {
+                        if (!parse.skipMember()) return false;
+                    }
+                }
+                if (i < kNumSlots) {
+                    slots_[i] = s;
+                    refreshSlotVelocity(i);
+                }
+            }
+        } else {
+            if (!parse.skipMember()) return false;
+        }
+    }
+
+    // Reload params from current slot after deserialise
+    loadSelectedSlotParams();
+    return true;
 }

@@ -30,6 +30,10 @@ public:
 
     virtual const char* name() const = 0;
 
+    // Focus view: draw engine-specific detail on two lines.
+    // y1/y2 are Y pixel positions. Default does nothing.
+    virtual void drawFocusDetail(int y1, int y2) const {}
+
     // UI support: step position and status text
     virtual int currentStep() const { return -1; }
     virtual int sequenceLength() const { return 0; }

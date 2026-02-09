@@ -1,5 +1,5 @@
-// Unit tests for spec-to-engine mapping, channel counting,
-// page name generation, and dense channel mapping.
+// Unit tests for spec helpers: engine naming, string utilities,
+// engine pool alignment.
 // No NT API dependency — standalone compilation.
 
 #include "../spec_helpers.h"
@@ -27,176 +27,105 @@ static int tests = 0;
     } \
 } while (0)
 
-// --- Test: spec-to-engine mapping ---
+// --- Test: engine name lookup ---
 
-static void test_engineTypeFromSpec()
+static void test_specEngineName()
 {
-    ASSERT_EQ(engineTypeFromSpec(0), -1, "spec 0 -> None");
-    ASSERT_EQ(engineTypeFromSpec(1), 0,  "spec 1 -> Thorp (0)");
-    ASSERT_EQ(engineTypeFromSpec(2), 1,  "spec 2 -> Soma (1)");
-    ASSERT_EQ(engineTypeFromSpec(3), 2,  "spec 3 -> AE Seq (2)");
-    ASSERT_EQ(engineTypeFromSpec(4), 3,  "spec 4 -> Markov (3)");
-    ASSERT_EQ(engineTypeFromSpec(-1), -1, "spec -1 -> None");
-    ASSERT_EQ(engineTypeFromSpec(5), -1,  "spec 5 -> None (out of range)");
-    ASSERT_EQ(engineTypeFromSpec(100), -1, "spec 100 -> None (out of range)");
+    ASSERT_STR_EQ(specEngineName(0), "Thorp", "engine 0 -> Thorp");
+    ASSERT_STR_EQ(specEngineName(1), "Soma", "engine 1 -> Soma");
+    ASSERT_STR_EQ(specEngineName(2), "AE Seq", "engine 2 -> AE Seq");
+    ASSERT_STR_EQ(specEngineName(3), "Markov", "engine 3 -> Markov");
+    ASSERT_STR_EQ(specEngineName(-1), "?", "engine -1 -> ?");
+    ASSERT_STR_EQ(specEngineName(4), "?", "engine 4 -> ?");
 }
 
-// --- Test: active channel counting ---
+// --- Test: specStrCopy ---
 
-static void test_countActiveChannels()
+static void test_specStrCopy()
 {
-    {
-        int specs[] = {2, 0, 0, 0, 0, 0, 0, 0};
-        ASSERT_EQ(countActiveChannels(specs), 1, "[2,0,...] -> 1");
-    }
-    {
-        int specs[] = {2, 1, 0, 0, 0, 0, 0, 0};
-        ASSERT_EQ(countActiveChannels(specs), 2, "[2,1,0,...] -> 2");
-    }
-    {
-        int specs[] = {2, 2, 2, 2, 0, 0, 0, 0};
-        ASSERT_EQ(countActiveChannels(specs), 4, "[2,2,2,2,0,...] -> 4");
-    }
-    {
-        int specs[] = {0, 0, 0, 0, 0, 0, 0, 0};
-        ASSERT_EQ(countActiveChannels(specs), 0, "all zero -> 0");
-    }
-    {
-        int specs[] = {0, 0, 0, 4, 0, 0, 0, 0};
-        ASSERT_EQ(countActiveChannels(specs), 1, "[0,0,0,4,0,...] -> 1");
-    }
-    {
-        int specs[] = {1, 2, 3, 4, 0, 0, 0, 0};
-        ASSERT_EQ(countActiveChannels(specs), 4, "[1,2,3,4,0,...] -> 4");
-    }
-    {
-        int specs[] = {1, 2, 3, 4, 1, 2, 3, 4};
-        ASSERT_EQ(countActiveChannels(specs), 8, "all 8 active -> 8");
-    }
-    {
-        int specs[] = {0, 0, 0, 0, 0, 0, 0, 1};
-        ASSERT_EQ(countActiveChannels(specs), 1, "only slot 8 -> 1");
-    }
+    char buf[24];
+    int len;
+
+    len = specStrCopy(buf, "Hello", 24);
+    buf[len] = 0;
+    ASSERT_EQ(len, 5, "strCopy Hello len");
+    ASSERT_STR_EQ(buf, "Hello", "strCopy Hello");
+
+    len = specStrCopy(buf, "TooLong", 3);
+    buf[len] = 0;
+    ASSERT_EQ(len, 3, "strCopy truncated len");
+    ASSERT_STR_EQ(buf, "Too", "strCopy truncated");
+
+    len = specStrCopy(buf, "", 24);
+    ASSERT_EQ(len, 0, "strCopy empty len");
 }
 
-// --- Test: page name generation ---
+// --- Test: specIntToString ---
 
-static void test_pageNames_singleSoma()
+static void test_specIntToString()
 {
-    int specs[] = {2, 0, 0, 0, 0, 0, 0, 0};
-    char routing[8][24], engine[8][24];
-    int n = buildPageNames(specs, routing, engine);
-    ASSERT_EQ(n, 1, "single soma: 1 active");
-    ASSERT_STR_EQ(routing[0], "Soma Routing", "single soma: routing name");
-    ASSERT_STR_EQ(engine[0], "Soma", "single soma: engine name");
+    char buf[16];
+    int len;
+
+    len = specIntToString(buf, 0);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "0", "intToString 0");
+
+    len = specIntToString(buf, 1);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "1", "intToString 1");
+
+    len = specIntToString(buf, 42);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "42", "intToString 42");
+
+    len = specIntToString(buf, -7);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "-7", "intToString -7");
+
+    len = specIntToString(buf, 100);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "100", "intToString 100");
 }
 
-static void test_pageNames_twoSomas()
-{
-    int specs[] = {2, 2, 0, 0, 0, 0, 0, 0};
-    char routing[8][24], engine[8][24];
-    int n = buildPageNames(specs, routing, engine);
-    ASSERT_EQ(n, 2, "two somas: 2 active");
-    ASSERT_STR_EQ(routing[0], "Soma 1 Routing", "two somas: routing 1");
-    ASSERT_STR_EQ(engine[0], "Soma 1", "two somas: engine 1");
-    ASSERT_STR_EQ(routing[1], "Soma 2 Routing", "two somas: routing 2");
-    ASSERT_STR_EQ(engine[1], "Soma 2", "two somas: engine 2");
-}
+// --- Test: page name building (simulates what construct/switchEngine does) ---
 
-static void test_pageNames_mixed()
+static void test_pageNameBuild()
 {
-    int specs[] = {2, 1, 0, 0, 0, 0, 0, 0};
-    char routing[8][24], engine[8][24];
-    int n = buildPageNames(specs, routing, engine);
-    ASSERT_EQ(n, 2, "mixed: 2 active");
-    ASSERT_STR_EQ(routing[0], "Soma Routing", "mixed: soma routing");
-    ASSERT_STR_EQ(engine[0], "Soma", "mixed: soma engine");
-    ASSERT_STR_EQ(routing[1], "Thorp Routing", "mixed: thorp routing");
-    ASSERT_STR_EQ(engine[1], "Thorp", "mixed: thorp engine");
-}
+    // Simulate building "Ch 1 Thorp" page name
+    char buf[24];
+    int len = specStrCopy(buf, "Ch ", 3);
+    len += specIntToString(buf + len, 1);
+    buf[len++] = ' ';
+    len += specStrCopy(buf + len, specEngineName(0), 23 - len);  // Thorp
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "Ch 1 Thorp", "page name Ch 1 Thorp");
 
-static void test_pageNames_allDifferent()
-{
-    int specs[] = {1, 2, 3, 4, 0, 0, 0, 0};
-    char routing[8][24], engine[8][24];
-    int n = buildPageNames(specs, routing, engine);
-    ASSERT_EQ(n, 4, "all different: 4 active");
-    ASSERT_STR_EQ(engine[0], "Thorp", "all diff: thorp");
-    ASSERT_STR_EQ(engine[1], "Soma", "all diff: soma");
-    ASSERT_STR_EQ(engine[2], "AE Seq", "all diff: ae seq");
-    ASSERT_STR_EQ(engine[3], "Markov", "all diff: markov");
-    ASSERT_STR_EQ(routing[0], "Thorp Routing", "all diff: thorp routing");
-    ASSERT_STR_EQ(routing[1], "Soma Routing", "all diff: soma routing");
-    ASSERT_STR_EQ(routing[2], "AE Seq Routing", "all diff: ae seq routing");
-    ASSERT_STR_EQ(routing[3], "Markov Routing", "all diff: markov routing");
-}
+    // "Ch 3 AE Seq"
+    len = specStrCopy(buf, "Ch ", 3);
+    len += specIntToString(buf + len, 3);
+    buf[len++] = ' ';
+    len += specStrCopy(buf + len, specEngineName(2), 23 - len);  // AE Seq
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "Ch 3 AE Seq", "page name Ch 3 AE Seq");
 
-static void test_pageNames_threeMarkovs()
-{
-    int specs[] = {4, 4, 4, 0, 0, 0, 0, 0};
-    char routing[8][24], engine[8][24];
-    int n = buildPageNames(specs, routing, engine);
-    ASSERT_EQ(n, 3, "three markovs: 3 active");
-    ASSERT_STR_EQ(engine[0], "Markov 1", "3 markovs: engine 1");
-    ASSERT_STR_EQ(engine[1], "Markov 2", "3 markovs: engine 2");
-    ASSERT_STR_EQ(engine[2], "Markov 3", "3 markovs: engine 3");
-    ASSERT_STR_EQ(routing[0], "Markov 1 Routing", "3 markovs: routing 1");
-    ASSERT_STR_EQ(routing[1], "Markov 2 Routing", "3 markovs: routing 2");
-    ASSERT_STR_EQ(routing[2], "Markov 3 Routing", "3 markovs: routing 3");
-}
+    // "Ch 8" (None — no engine suffix)
+    len = specStrCopy(buf, "Ch ", 3);
+    len += specIntToString(buf + len, 8);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "Ch 8", "page name Ch 8 (None)");
 
-static void test_pageNames_eightSomas()
-{
-    int specs[] = {2, 2, 2, 2, 2, 2, 2, 2};
-    char routing[8][24], engine[8][24];
-    int n = buildPageNames(specs, routing, engine);
-    ASSERT_EQ(n, 8, "eight somas: 8 active");
-    ASSERT_STR_EQ(engine[0], "Soma 1", "8 somas: engine 1");
-    ASSERT_STR_EQ(engine[7], "Soma 8", "8 somas: engine 8");
-    ASSERT_STR_EQ(routing[0], "Soma 1 Routing", "8 somas: routing 1");
-    ASSERT_STR_EQ(routing[7], "Soma 8 Routing", "8 somas: routing 8");
-}
-
-// --- Test: dense channel mapping ---
-
-static void test_denseMapping()
-{
-    {
-        int specs[] = {2, 0, 1, 0, 0, 0, 0, 0};
-        int slots[8] = {};
-        int n = buildDenseMapping(specs, slots);
-        ASSERT_EQ(n, 2, "[2,0,1,0,...] -> 2 active");
-        ASSERT_EQ(slots[0], 0, "[2,0,1,0,...] ch0 -> slot 0");
-        ASSERT_EQ(slots[1], 2, "[2,0,1,0,...] ch1 -> slot 2");
-    }
-    {
-        int specs[] = {0, 0, 0, 4, 0, 0, 0, 0};
-        int slots[8] = {};
-        int n = buildDenseMapping(specs, slots);
-        ASSERT_EQ(n, 1, "[0,0,0,4,...] -> 1 active");
-        ASSERT_EQ(slots[0], 3, "[0,0,0,4,...] ch0 -> slot 3");
-    }
-    {
-        int specs[] = {1, 2, 3, 4, 0, 0, 0, 0};
-        int slots[8] = {};
-        int n = buildDenseMapping(specs, slots);
-        ASSERT_EQ(n, 4, "[1,2,3,4,...] -> 4 active");
-        ASSERT_EQ(slots[0], 0, "ch0 -> slot 0");
-        ASSERT_EQ(slots[1], 1, "ch1 -> slot 1");
-        ASSERT_EQ(slots[2], 2, "ch2 -> slot 2");
-        ASSERT_EQ(slots[3], 3, "ch3 -> slot 3");
-    }
-    {
-        int specs[] = {0, 0, 0, 0, 0, 0, 0, 3};
-        int slots[8] = {};
-        int n = buildDenseMapping(specs, slots);
-        ASSERT_EQ(n, 1, "only slot 8 -> 1 active");
-        ASSERT_EQ(slots[0], 7, "ch0 -> slot 7");
-    }
+    // "Ch 2 Routing"
+    len = specStrCopy(buf, "Ch ", 3);
+    len += specIntToString(buf + len, 2);
+    len += specStrCopy(buf + len, " Routing", 23 - len);
+    buf[len] = 0;
+    ASSERT_STR_EQ(buf, "Ch 2 Routing", "page name Ch 2 Routing");
 }
 
 // --- Test: engine pool alignment ---
 
+static const int kMaxChannels = 8;
 static const int kPoolSlotSize = 2048;
 static const int kPoolAlignment = 8;
 
@@ -206,10 +135,9 @@ static_assert(kPoolSlotSize % kPoolAlignment == 0,
 
 static void test_poolSlotAlignment()
 {
-    // Simulate the pool as it exists in NtSeq: alignas(8) uint8_t[8*2048]
-    alignas(8) uint8_t pool[kSpecMaxSlots * kPoolSlotSize];
+    alignas(8) uint8_t pool[kMaxChannels * kPoolSlotSize];
 
-    for (int ch = 0; ch < kSpecMaxSlots; ++ch) {
+    for (int ch = 0; ch < kMaxChannels; ++ch) {
         uint8_t* slot = pool + ch * kPoolSlotSize;
         uintptr_t addr = (uintptr_t)slot;
         tests++;
@@ -222,41 +150,48 @@ static void test_poolSlotAlignment()
     }
 }
 
-// Verify that dense channel indexing into pool maintains alignment
-static void test_densePoolAlignment()
+// --- Test: parameter layout math ---
+
+static void test_paramLayout()
 {
-    alignas(8) uint8_t pool[kSpecMaxSlots * kPoolSlotSize];
+    // Verify the parameter layout formula
+    int numGlobal = 5;
+    int numCommon = 15;
+    int numEngSlots = 32;
+    int paramsPerCh = numCommon + numEngSlots;
+    ASSERT_EQ(paramsPerCh, 47, "params per channel = 47");
 
-    // Simulate sparse specs with gaps
-    int specs[] = {2, 0, 4, 0, 0, 1, 0, 3};
-    int slots[8] = {};
-    int n = buildDenseMapping(specs, slots);
+    // 1 channel: 5 + 1 + 47 = 53
+    int total1 = numGlobal + 1 + 1 * paramsPerCh;
+    ASSERT_EQ(total1, 53, "1 channel total = 53");
 
-    for (int ch = 0; ch < n; ++ch) {
-        uint8_t* slot = pool + ch * kPoolSlotSize;
-        uintptr_t addr = (uintptr_t)slot;
-        tests++;
-        if (addr % kPoolAlignment != 0) {
-            fprintf(stderr, "FAIL: dense slot %d (spec %d) misaligned: 0x%lx\n",
-                ch, slots[ch], (unsigned long)addr);
-            failures++;
-        }
+    // 8 channels: 5 + 8 + 8*47 = 389
+    int total8 = numGlobal + 8 + 8 * paramsPerCh;
+    ASSERT_EQ(total8, 389, "8 channel total = 389");
+
+    // Engine type param indices for 4 channels: 5, 6, 7, 8
+    for (int ch = 0; ch < 4; ++ch) {
+        int etIdx = numGlobal + ch;
+        ASSERT_EQ(etIdx, 5 + ch, "engine type param index");
     }
+
+    // First channel's common base (4 channels): 5 + 4 = 9
+    int firstCommon = numGlobal + 4;
+    ASSERT_EQ(firstCommon, 9, "ch0 common base (4ch) = 9");
+
+    // Second channel's common base: 9 + 47 = 56
+    int secondCommon = firstCommon + paramsPerCh;
+    ASSERT_EQ(secondCommon, 56, "ch1 common base (4ch) = 56");
 }
 
 int main()
 {
-    test_engineTypeFromSpec();
-    test_countActiveChannels();
-    test_pageNames_singleSoma();
-    test_pageNames_twoSomas();
-    test_pageNames_mixed();
-    test_pageNames_allDifferent();
-    test_pageNames_threeMarkovs();
-    test_pageNames_eightSomas();
-    test_denseMapping();
+    test_specEngineName();
+    test_specStrCopy();
+    test_specIntToString();
+    test_pageNameBuild();
     test_poolSlotAlignment();
-    test_densePoolAlignment();
+    test_paramLayout();
 
     printf("%d tests, %d failures\n", tests, failures);
     return failures > 0 ? 1 : 0;

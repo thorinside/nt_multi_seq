@@ -492,6 +492,41 @@ int SeqMarkovEngine::getStatusText(char* buf, int maxLen) const
     return len;
 }
 
+void SeqMarkovEngine::drawFocusDetail(int y1, int y2) const
+{
+    char buf[64];
+    int len = 0;
+    const char* s;
+
+    // Line 1: Style:Tonal  Emotion:50%  Density:60%
+    s = "Style:"; while (*s) buf[len++] = *s++;
+    s = styleStrings[clampInt(style_, 0, kNumStyles - 1)];
+    if (s) while (*s && len < 20) buf[len++] = *s++;
+    s = "  Emotion:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, emotion_);
+    buf[len++] = '%';
+    s = "  Density:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, density_);
+    buf[len++] = '%';
+    buf[len] = 0;
+    NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+
+    // Line 2: Len:16  Jump:30%  Range:2  Mut:20%
+    len = 0;
+    s = "Len:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, length_);
+    s = "  Jump:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, jumpiness_);
+    buf[len++] = '%';
+    s = "  Range:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, range_);
+    s = "  Mut:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, mutation_);
+    buf[len++] = '%';
+    buf[len] = 0;
+    NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
+}
+
 int SeqMarkovEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
 {
     for (int i = 0; i < kNumMarkovParams; ++i)

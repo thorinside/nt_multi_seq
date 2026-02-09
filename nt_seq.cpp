@@ -1,5 +1,7 @@
 #include "nt_seq.h"
+#include "engines/ThorpEngine.h"
 #include <new>
+#include <distingnt/serialisation.h>
 
 // Stub: virtual destructors emit a deleting-destructor thunk that references
 // operator delete, but we only use placement new on the NT runtime.
@@ -19,10 +21,54 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data);
 int parameterUiPrefix(_NT_algorithm* self, int p, char* buff);
 int parameterString(_NT_algorithm* self, int p, int v, char* buff);
 
+void serialise(_NT_algorithm* self, _NT_jsonStream& stream)
+{
+    NtSeq* alg = static_cast<NtSeq*>(self);
+    // Store engine type per channel, then delegate to engine for extra state
+    for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
+        // Engine type is already in v[] (framework saves it), but Thorp has extra state
+        if (alg->channels[ch].engineType == kEngineThorp && alg->channels[ch].engine) {
+            char name[4] = { 't', (char)('0' + ch), 0, 0 };
+            stream.addMemberName(name);
+            stream.openObject();
+            static_cast<ThorpEngine*>(alg->channels[ch].engine)->serialise(stream);
+            stream.closeObject();
+        }
+    }
+}
+
+bool deserialise(_NT_algorithm* self, _NT_jsonParse& parse)
+{
+    NtSeq* alg = static_cast<NtSeq*>(self);
+    int numMembers;
+    if (!parse.numberOfObjectMembers(numMembers))
+        return false;
+
+    for (int m = 0; m < numMembers; ++m) {
+        bool matched = false;
+        for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
+            if (alg->channels[ch].engineType == kEngineThorp && alg->channels[ch].engine) {
+                char name[4] = { 't', (char)('0' + ch), 0, 0 };
+                if (parse.matchName(name)) {
+                    if (!static_cast<ThorpEngine*>(alg->channels[ch].engine)->deserialise(parse))
+                        return false;
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if (!matched) {
+            if (!parse.skipMember())
+                return false;
+        }
+    }
+    return true;
+}
+
 static const _NT_factory factory = {
     .guid = NT_MULTICHAR('T', 'h', 'M', 's'),
     .name = "nt_multi_seq",
-    .description = "Multi-channel sequencer (specs: 0=None 1=Thorp 2=Soma 3=AE 4=Markov)",
+    .description = "Multi-channel sequencer with runtime engine selection",
     .numSpecifications = ARRAY_SIZE(specifications),
     .specifications = specifications,
     .calculateStaticRequirements = nullptr,
@@ -38,8 +84,8 @@ static const _NT_factory factory = {
     .hasCustomUi = hasCustomUi,
     .customUi = customUi,
     .setupUi = nullptr,
-    .serialise = nullptr,
-    .deserialise = nullptr,
+    .serialise = serialise,
+    .deserialise = deserialise,
     .midiSysEx = nullptr,
     .parameterUiPrefix = parameterUiPrefix,
     .parameterString = parameterString,

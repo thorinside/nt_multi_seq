@@ -151,13 +151,15 @@ static void drawOverview(NtSeq* alg)
         int base = alg->channels[ch].paramBase;
         scaleEnabled = alg->v[base + kChScaleEnable] != 0;
 
-        // Channel number (spec slot, not dense index)
-        NT_intToString(buf, alg->channels[ch].specSlot + 1);
+        // Channel number (1-based)
+        NT_intToString(buf, ch + 1);
         NT_drawText(0, y, buf, 15, kNT_textLeft, kNT_textTiny);
 
-        // Engine name
+        // Engine name (or "--" for None)
         if (eng)
             NT_drawText(7, y, eng->name(), 10, kNT_textLeft, kNT_textTiny);
+        else
+            NT_drawText(7, y, "--", 5, kNT_textLeft, kNT_textTiny);
 
         // Status text from engine
         if (eng) {
@@ -188,193 +190,6 @@ static void drawOverview(NtSeq* alg)
 
 // --- Focus mode ---
 
-// Engine-specific focus detail strings
-static void drawFocusEngineDetail(NtSeq* alg, int ch, int y1, int y2)
-{
-    char buf[64];
-    int base = alg->channels[ch].engineParamBase;
-    EngineType type = alg->channels[ch].engineType;
-
-    switch (type) {
-    case kEngineThorp: {
-        ThorpEngine* th = static_cast<ThorpEngine*>(alg->channels[ch].engine);
-
-        // Line 1: Pat:<name> Mode:<name> Play:<mode>
-        int len = 0;
-        const char* s;
-        s = "Pat:"; while (*s) buf[len++] = *s++;
-        // Pattern name from param enum string
-        int patIdx = alg->v[base + 0]; // kThorpPattern
-        if (patIdx < 0) patIdx = 0;
-        if (patIdx > 22) patIdx = 22;
-        buf[len++] = ' ';
-        // We know the param has enum strings, but we can't access static arrays
-        // from ThorpEngine.cpp here. Use the parameter definition's enumStrings.
-        const char* const* strings = alg->paramDefs[base + 0].enumStrings;
-        if (strings && strings[patIdx]) {
-            s = strings[patIdx];
-            while (*s && len < 30) buf[len++] = *s++;
-        }
-        buf[len] = 0;
-        NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
-
-        // Sequence mode
-        len = 0;
-        s = "Mode:"; while (*s) buf[len++] = *s++;
-        buf[len++] = ' ';
-        int modeIdx = alg->v[base + 9]; // kThorpSequenceMode
-        const char* const* modeStrings = alg->paramDefs[base + 9].enumStrings;
-        if (modeStrings && modeIdx >= 0 && modeStrings[modeIdx]) {
-            s = modeStrings[modeIdx];
-            while (*s && len < 20) buf[len++] = *s++;
-        }
-        buf[len] = 0;
-        NT_drawText(108, y1, buf, 8, kNT_textLeft, kNT_textTiny);
-
-        // Play mode
-        len = 0;
-        s = "Play:"; while (*s) buf[len++] = *s++;
-        buf[len++] = ' ';
-        int playModeIdx = alg->v[base + 12]; // kThorpPlayMode
-        const char* const* playModeStrings = alg->paramDefs[base + 12].enumStrings;
-        if (playModeStrings && playModeIdx >= 0 && playModeStrings[playModeIdx]) {
-            s = playModeStrings[playModeIdx];
-            while (*s && len < 16) buf[len++] = *s++;
-        }
-        buf[len] = 0;
-        NT_drawText(190, y1, buf, 8, kNT_textLeft, kNT_textTiny);
-
-        // Line 2: compact performance values
-        len = 0;
-        s = "L:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 2]); // kThorpLength
-        s = " O:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 3]); // kThorpOffset
-        s = " R:"; while (*s) buf[len++] = *s++;
-        buf[len++] = alg->v[base + 4] ? '1' : '0'; // kThorpReverse
-        s = " S:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 5]); // kThorpArpSlot
-        s = " C:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 13]); // kThorpChainLen
-        s = " P:"; while (*s) buf[len++] = *s++;
-        int chainPos = th ? (th->uiChainPos() + 1) : 1;
-        len += NT_intToString(buf + len, chainPos);
-        s = " CS:"; while (*s) buf[len++] = *s++;
-        int chainSlot = th ? th->uiChainSlot() : 1;
-        len += NT_intToString(buf + len, chainSlot);
-        s = " G:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 6]); // kThorpGateProb
-        buf[len++] = '%';
-        s = " V:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 10]); // kThorpGlobalVelocity
-        buf[len++] = '%';
-        s = " GL:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 11]); // kThorpGateLen
-        buf[len++] = '%';
-        buf[len] = 0;
-        NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
-        break;
-    }
-
-    case kEngineSoma: {
-        // Line 1: Oct Spread: 50%  Note Mut: 70%
-        int len = 0;
-        const char* s;
-        s = "Oct Spread:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 0]); // kSomaOctaveSpread
-        buf[len++] = '%';
-        s = "  Note Mut:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 1]); // kSomaNoteMutate
-        buf[len++] = '%';
-        buf[len] = 0;
-        NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
-
-        // Line 2: Gate Mut: 80%  Length: 8
-        len = 0;
-        s = "Gate Mut:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 2]); // kSomaGateMutate
-        buf[len++] = '%';
-        s = "  Length:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 3]); // kSomaLength
-        buf[len] = 0;
-        NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
-        break;
-    }
-
-    case kEngineAeSeq: {
-        // Line 1: CV Seq:1 Steps:8  Gate Seq:1 Steps:16
-        int len = 0;
-        const char* s;
-        s = "CV Seq:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 0]); // kAeCvSeq
-        s = " Steps:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 2]); // kAeCvSteps
-        s = "  Gate Seq:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 1]); // kAeGateSeq
-        s = " Steps:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 7]); // kAeGateSteps
-        buf[len] = 0;
-        NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
-
-        // Line 2: Range: -1.0..+1.0V  Bits:16  Thresh:50%
-        len = 0;
-        s = "Range:"; while (*s) buf[len++] = *s++;
-        len += NT_floatToString(buf + len, (float)alg->v[base + 3] / 10.0f, 1); // kAeMinCv
-        s = ".."; while (*s) buf[len++] = *s++;
-        len += NT_floatToString(buf + len, (float)alg->v[base + 4] / 10.0f, 1); // kAeMaxCv
-        buf[len++] = 'V';
-        s = "  Bits:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 6]); // kAeBitDepth
-        s = "  Thresh:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 8]); // kAeThreshold
-        buf[len++] = '%';
-        buf[len] = 0;
-        NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
-        break;
-    }
-
-    case kEngineSeqMarkov: {
-        // Line 1: Style:Tonal  Emotion:50%  Density:60%
-        int len = 0;
-        const char* s;
-        s = "Style:"; while (*s) buf[len++] = *s++;
-        int styleIdx = alg->v[base + 0]; // kMarkovStyle
-        const char* const* strings = alg->paramDefs[base + 0].enumStrings;
-        if (strings && styleIdx >= 0 && strings[styleIdx]) {
-            s = strings[styleIdx];
-            while (*s && len < 20) buf[len++] = *s++;
-        }
-        s = "  Emotion:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 1]); // kMarkovEmotion
-        buf[len++] = '%';
-        s = "  Density:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 6]); // kMarkovDensity
-        buf[len++] = '%';
-        buf[len] = 0;
-        NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
-
-        // Line 2: Len:16  Jump:30%  Range:2  Mut:20%
-        len = 0;
-        s = "Len:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 5]); // kMarkovLength
-        s = "  Jump:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 2]); // kMarkovJumpiness
-        buf[len++] = '%';
-        s = "  Range:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 3]); // kMarkovRange
-        s = "  Mut:"; while (*s) buf[len++] = *s++;
-        len += NT_intToString(buf + len, alg->v[base + 4]); // kMarkovMutation
-        buf[len++] = '%';
-        buf[len] = 0;
-        NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
-        break;
-    }
-
-    default:
-        break;
-    }
-}
-
 static void drawFocus(NtSeq* alg, int focusCh)
 {
     char buf[64];
@@ -382,15 +197,17 @@ static void drawFocus(NtSeq* alg, int focusCh)
     int base = alg->channels[focusCh].paramBase;
     bool scaleEnabled = alg->v[base + kChScaleEnable] != 0;
 
-    // --- Line 1 (y=0): "Ch 2: Soma" + scale info ---
+    // --- Line 1 (y=0): "Ch N: <Engine>" ---
     int len = 0;
     const char* s = "Ch "; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, alg->channels[focusCh].specSlot + 1);
+    len += NT_intToString(buf + len, focusCh + 1);
     buf[len++] = ':';
     buf[len++] = ' ';
     if (eng) {
         s = eng->name();
         while (*s) buf[len++] = *s++;
+    } else {
+        s = "--"; while (*s) buf[len++] = *s++;
     }
     buf[len] = 0;
     NT_drawText(0, 7, buf, 15, kNT_textLeft, kNT_textNormal);
@@ -418,8 +235,14 @@ static void drawFocus(NtSeq* alg, int focusCh)
         NT_drawText(255, 7, buf, 8, kNT_textRight, kNT_textTiny);
     }
 
+    // If no engine, just show "No engine selected"
+    if (!eng) {
+        NT_drawText(0, 30, "No engine selected", 8, kNT_textLeft, kNT_textTiny);
+        return;
+    }
+
     // --- Line 2 (y=10): Step bar + step counter ---
-    if (eng) {
+    {
         int step = eng->currentStep();
         int length = eng->sequenceLength();
 
@@ -459,7 +282,7 @@ static void drawFocus(NtSeq* alg, int focusCh)
     NT_drawText(0, 25, buf, 10, kNT_textLeft, kNT_textTiny);
 
     // --- Lines 4-5 (y=31, y=39): Engine-specific params ---
-    drawFocusEngineDetail(alg, focusCh, 33, 41);
+    eng->drawFocusDetail(33, 41);
 
     // --- Separator line (y=48) ---
     NT_drawShapeI(kNT_line, 0, 48, 255, 48, 4);
@@ -473,11 +296,13 @@ static void drawFocus(NtSeq* alg, int focusCh)
         bool chScaleEn = alg->v[chBase + kChScaleEnable] != 0;
 
         len = 0;
-        len += NT_intToString(buf + len, alg->channels[ch].specSlot + 1);
+        len += NT_intToString(buf + len, ch + 1);
         buf[len++] = ':';
         if (alg->channels[ch].engine) {
             s = alg->channels[ch].engine->name();
             while (*s && len < 12) buf[len++] = *s++;
+        } else {
+            s = "--"; while (*s && len < 12) buf[len++] = *s++;
         }
         buf[len++] = ' ';
         len += formatPitch(buf + len, alg->channels[ch].cachedPitch, chScaleEn,
@@ -513,9 +338,9 @@ uint32_t hasCustomUi(_NT_algorithm* self)
     uint32_t controls = kNT_encoderButtonR | kNT_potButtonC;
     int focus = alg->focusChannel;
     if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineThorp) {
-        controls |= kNT_button1 | kNT_button2 | kNT_button3 | kNT_button4;
         controls |= kNT_encoderL | kNT_encoderR | kNT_encoderButtonL;
         controls |= kNT_potL | kNT_potC | kNT_potR;
+        controls |= kNT_potButtonL | kNT_potButtonR;
     } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineAeSeq) {
         controls |= kNT_encoderL | kNT_encoderR;
         controls |= kNT_potL | kNT_potC | kNT_potR;
@@ -566,9 +391,7 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
     if (focus < 0 || focus >= (int)alg->numChannels)
         return;
 
-    // AE focus controls:
-    // Encoder L/R: CV Seq / Gate Seq
-    // Pot L/C/R: Gate Threshold / CV Bit Depth / Velocity
+    // AE focus controls
     if (alg->channels[focus].engineType == kEngineAeSeq && alg->channels[focus].engine) {
         int engBase = alg->channels[focus].engineParamBase;
 
@@ -586,19 +409,19 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         }
 
         if (data.controls & kNT_potL) {
-            int v = 1 + (int)(data.pots[0] * 99.999f); // 1..100
+            int v = 1 + (int)(data.pots[0] * 99.999f);
             if (v < 1) v = 1;
             if (v > 100) v = 100;
             NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeThreshold) + paramOffset, (int16_t)v);
         }
         if (data.controls & kNT_potC) {
-            int v = 2 + (int)(data.pots[1] * 14.999f); // 2..16
+            int v = 2 + (int)(data.pots[1] * 14.999f);
             if (v < 2) v = 2;
             if (v > 16) v = 16;
             NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeBitDepth) + paramOffset, (int16_t)v);
         }
         if (data.controls & kNT_potR) {
-            int v = (int)(data.pots[2] * 100.0f + 0.5f); // 0..100
+            int v = (int)(data.pots[2] * 100.0f + 0.5f);
             if (v < 0) v = 0;
             if (v > 100) v = 100;
             NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeVelocity) + paramOffset, (int16_t)v);
@@ -606,12 +429,7 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
-    // Soma focus controls:
-    // Pot L: Note Mutate (0-100)
-    // Pot C: Gate Mutate (0-100)
-    // Pot R: Oct Spread (0-100)
-    // Encoder L: Length (1-64)
-    // Encoder R: Velocity (0-100)
+    // Soma focus controls
     if (alg->channels[focus].engineType == kEngineSoma && alg->channels[focus].engine) {
         int engBase = alg->channels[focus].engineParamBase;
 
@@ -648,9 +466,7 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
-    // Markov focus controls:
-    // Pot 1 button: force mutate
-    // Pot 3 button: force regenerate
+    // Markov focus controls
     if (alg->channels[focus].engineType == kEngineSeqMarkov && alg->channels[focus].engine) {
         SeqMarkovEngine* mk = static_cast<SeqMarkovEngine*>(alg->channels[focus].engine);
         if ((data.controls & kNT_potButtonL) && !(data.lastButtons & kNT_potButtonL))
@@ -660,83 +476,70 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
+    // Thorp focus controls
     if (alg->channels[focus].engineType != kEngineThorp || !alg->channels[focus].engine)
         return;
 
-    ThorpEngine* th = static_cast<ThorpEngine*>(alg->channels[focus].engine);
     int engBase = alg->channels[focus].engineParamBase;
 
-    // Pot L: chain length (1-16)
-    if (data.controls & kNT_potL) {
-        int len = 1 + (int)(data.pots[0] * 15.999f);
-        if (len < 1) len = 1;
-        if (len > 16) len = 16;
-        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)len);
-        th->uiSetChainLength(len);
+    // Encoder L turn: select arp slot (wraps 1-16, also writes to chain)
+    if (data.encoders[0] != 0) {
+        int v = alg->v[engBase + ThorpEngine::kThorpArpSlot] + data.encoders[0];
+        while (v < 1) v += 16;
+        while (v > 16) v -= 16;
+        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpArpSlot) + paramOffset, (int16_t)v);
     }
 
-    // Pot C: chain cursor position (1..chainLen)
-    if (data.controls & kNT_potC) {
-        int len = th->uiChainLength();
-        int pos = (int)(data.pots[1] * (float)len);
-        if (pos >= len) pos = len - 1;
-        if (pos < 0) pos = 0;
-        th->uiSetChainPos(pos);
-    }
-
-    // Pot R: slot at current chain position (1-16)
-    if (data.controls & kNT_potR) {
-        int target = 1 + (int)(data.pots[2] * 15.999f);
-        if (target < 1) target = 1;
-        if (target > 16) target = 16;
-        int delta = target - th->uiChainSlot();
-        th->uiAdjustChainSlot(delta);
-    }
-
-    // Encoders: quick nudge position/slot.
-    if (data.encoders[0] != 0)
-        th->uiAdjustChainPos(data.encoders[0]);
-    if (data.encoders[1] != 0)
-        th->uiAdjustChainSlot(data.encoders[1]);
-
-    // Encoder L push: insert chain step after cursor.
+    // Encoder L push: increment Chain Len (extend chain)
     if ((data.controls & kNT_encoderButtonL) && !(data.lastButtons & kNT_encoderButtonL)) {
-        th->uiInsertChainStep();
-        int len = th->uiChainLength();
-        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)len);
+        int v = alg->v[engBase + ThorpEngine::kThorpChainLen] + 1;
+        if (v <= ThorpEngine::kNumSlots)
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)v);
     }
 
-    // Button 1/4: chain length -/+.
-    if ((data.controls & kNT_button1) && !(data.lastButtons & kNT_button1)) {
-        int len = th->uiChainLength() - 1;
-        if (len < 1) len = 1;
-        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)len);
-        th->uiSetChainLength(len);
-    }
-    if ((data.controls & kNT_button4) && !(data.lastButtons & kNT_button4)) {
-        int len = th->uiChainLength() + 1;
-        if (len > 16) len = 16;
-        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)len);
-        th->uiSetChainLength(len);
+    // Encoder R turn: adjust Chain Len
+    if (data.encoders[1] != 0) {
+        int v = alg->v[engBase + ThorpEngine::kThorpChainLen] + data.encoders[1];
+        if (v < 1) v = 1;
+        if (v > ThorpEngine::kNumSlots) v = ThorpEngine::kNumSlots;
+        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)v);
     }
 
-    // Button 2: toggle Play Mode Jam/Song.
-    if ((data.controls & kNT_button2) && !(data.lastButtons & kNT_button2)) {
+    // Pot L: Oct Jump %
+    if (data.controls & kNT_potL) {
+        int v = (int)(data.pots[0] * 100.0f + 0.5f);
+        if (v < 0) v = 0;
+        if (v > 100) v = 100;
+        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpOctJump) + paramOffset, (int16_t)v);
+    }
+
+    // Pot C: Gate Prob %
+    if (data.controls & kNT_potC) {
+        int v = 1 + (int)(data.pots[1] * 99.0f + 0.5f);
+        if (v < 1) v = 1;
+        if (v > 100) v = 100;
+        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpGateProb) + paramOffset, (int16_t)v);
+    }
+
+    // Pot R: Sequence Mode
+    if (data.controls & kNT_potR) {
+        int v = (int)(data.pots[2] * (float)ThorpEngine::kNumSequenceModes);
+        if (v >= ThorpEngine::kNumSequenceModes) v = ThorpEngine::kNumSequenceModes - 1;
+        if (v < 0) v = 0;
+        NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpSequenceMode) + paramOffset, (int16_t)v);
+    }
+
+    // Pot L push: shrink chain
+    if ((data.controls & kNT_potButtonL) && !(data.lastButtons & kNT_potButtonL)) {
+        int v = alg->v[engBase + ThorpEngine::kThorpChainLen] - 1;
+        if (v >= 1)
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)v);
+    }
+
+    // Pot R push: toggle Play Mode
+    if ((data.controls & kNT_potButtonR) && !(data.lastButtons & kNT_potButtonR)) {
         int playMode = alg->v[engBase + ThorpEngine::kThorpPlayMode];
         playMode = (playMode == ThorpEngine::kPlaySong) ? ThorpEngine::kPlayJam : ThorpEngine::kPlaySong;
         NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpPlayMode) + paramOffset, (int16_t)playMode);
-    }
-
-    // Button 3: delete chain step at cursor, or cycle sequence mode if len=1.
-    if ((data.controls & kNT_button3) && !(data.lastButtons & kNT_button3)) {
-        if (th->uiChainLength() > 1) {
-            th->uiDeleteChainStep();
-            int len = th->uiChainLength();
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpChainLen) + paramOffset, (int16_t)len);
-        } else {
-            int seqMode = alg->v[engBase + ThorpEngine::kThorpSequenceMode];
-            seqMode = (seqMode + 1) % ThorpEngine::kNumSequenceModes;
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + ThorpEngine::kThorpSequenceMode) + paramOffset, (int16_t)seqMode);
-        }
     }
 }

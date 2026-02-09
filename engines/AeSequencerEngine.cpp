@@ -289,6 +289,40 @@ int AeSequencerEngine::getStatusText(char* buf, int maxLen) const
     return len;
 }
 
+void AeSequencerEngine::drawFocusDetail(int y1, int y2) const
+{
+    char buf[64];
+    int len = 0;
+    const char* s;
+
+    // Line 1: CV Seq:1 Steps:8  Gate Seq:1 Steps:16
+    s = "CV Seq:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, cvSeq_);
+    s = " Steps:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, cvSteps_);
+    s = "  Gate Seq:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, gateSeq_);
+    s = " Steps:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, gateSteps_);
+    buf[len] = 0;
+    NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+
+    // Line 2: Range: -1.0..+1.0V  Bits:16  Thresh:50%
+    len = 0;
+    s = "Range:"; while (*s) buf[len++] = *s++;
+    len += NT_floatToString(buf + len, (float)minCv_ / 10.0f, 1);
+    s = ".."; while (*s) buf[len++] = *s++;
+    len += NT_floatToString(buf + len, (float)maxCv_ / 10.0f, 1);
+    buf[len++] = 'V';
+    s = "  Bits:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, bitDepth_);
+    s = "  Thresh:"; while (*s) buf[len++] = *s++;
+    len += NT_intToString(buf + len, threshold_);
+    buf[len++] = '%';
+    buf[len] = 0;
+    NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
+}
+
 int AeSequencerEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
 {
     // Order chosen so hosts that effectively render only the first few

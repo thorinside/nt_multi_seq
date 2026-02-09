@@ -20,6 +20,7 @@ static inline float* busPtr(float* busFrames, int busIndex, int numFrames)
 void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
+    alg->initDone = true;
     int numFrames = numFramesBy4 * 4;
 
     // --- SD card mount detection ---
