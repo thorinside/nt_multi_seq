@@ -113,16 +113,42 @@ $(PLUGINS_DIR):
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# Unit test target - standalone spec logic tests (no NT API dependency)
-unit-test: $(BUILD_DIR)/test_spec_logic $(BUILD_DIR)/test_scale_quantizer
-	./$(BUILD_DIR)/test_spec_logic
-	./$(BUILD_DIR)/test_scale_quantizer
+# Unit test flags (shared)
+CXXFLAGS_UNIT = -std=c++11 -Wall -Wextra -Wno-unused-parameter
+
+# Unit test target - standalone tests (no NT runtime dependency)
+UNIT_TESTS = \
+	$(BUILD_DIR)/test_spec_logic \
+	$(BUILD_DIR)/test_scale_quantizer \
+	$(BUILD_DIR)/test_clock_processor \
+	$(BUILD_DIR)/test_thorp_engine \
+	$(BUILD_DIR)/test_soma_engine \
+	$(BUILD_DIR)/test_ae_engine \
+	$(BUILD_DIR)/test_markov_engine
+
+unit-test: $(UNIT_TESTS)
+	@for t in $(UNIT_TESTS); do echo "--- $$t ---"; ./$$t || exit 1; done
 
 $(BUILD_DIR)/test_spec_logic: tests/test_spec_logic.cpp spec_helpers.h | $(BUILD_DIR)
-	$(CXX_TEST) -std=c++11 -Wall -Wextra -Wno-unused-parameter -I. tests/test_spec_logic.cpp -o $@
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. tests/test_spec_logic.cpp -o $@
 
 $(BUILD_DIR)/test_scale_quantizer: tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
-	$(CXX_TEST) -std=c++11 -Wall -Wextra -Wno-unused-parameter -I. -I$(DISTINGNT_API)/include tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp -lm -o $@
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp -lm -o $@
+
+$(BUILD_DIR)/test_clock_processor: tests/test_clock_processor.cpp clock/ClockProcessor.cpp clock/ClockProcessor.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. tests/test_clock_processor.cpp -o $@
+
+$(BUILD_DIR)/test_thorp_engine: tests/test_thorp_engine.cpp tests/nt_stubs.h engines/ThorpEngine.cpp engines/ThorpEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_thorp_engine.cpp -lm -o $@
+
+$(BUILD_DIR)/test_soma_engine: tests/test_soma_engine.cpp tests/nt_stubs.h engines/SomaEngine.cpp engines/SomaEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_soma_engine.cpp -lm -o $@
+
+$(BUILD_DIR)/test_ae_engine: tests/test_ae_engine.cpp tests/nt_stubs.h engines/AeSequencerEngine.cpp engines/AeSequencerEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_ae_engine.cpp -lm -o $@
+
+$(BUILD_DIR)/test_markov_engine: tests/test_markov_engine.cpp tests/nt_stubs.h engines/SeqMarkovEngine.cpp engines/SeqMarkovEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_markov_engine.cpp -lm -o $@
 
 # Clean build artifacts
 clean:
