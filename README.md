@@ -2,17 +2,17 @@
 
 A multi-channel sequencer plugin for the [Expert Sleepers disting NT](https://expert-sleepers.co.uk/distingNT.html) Eurorack module.
 
-Each channel runs an independent sequencer engine, selected at instantiation time via the module's specification system. Channels share a global scale/tuning system using `.scl` microtuning files.
+Each channel runs an independent sequencer engine, selected at runtime via a per-channel Engine Type parameter. The number of channels (1-8) is set at instantiation time. Channels share a global scale/tuning system using `.scl` microtuning files.
 
 ## Engines
 
-| Spec Value | Engine | Description |
+| Engine Type | Engine | Description |
 |:---:|--------|-------------|
-| 0 | None | Channel skipped |
-| 1 | [Thorp](docs/thorp.md) | Pattern arpeggiator with 23 note patterns, 15 velocity patterns, chain sequencing, and song/jam modes |
-| 2 | [Soma](docs/soma.md) | Mutating step sequencer with note and gate mutation probabilities |
-| 3 | [AE Seq](docs/ae-seq.md) | Analog-style CV/gate sequencer with independent CV and gate sequence selection, bit depth control |
-| 4 | [Markov](docs/markov.md) | Markov chain melodic generator with 8 behavioral styles and semantic matrix generation |
+| None | - | Channel inactive |
+| Thorp | [Thorp](docs/thorp.md) | Pattern arpeggiator with 23 note patterns, 15 velocity patterns, chain sequencing, and song/jam modes |
+| Soma | [Soma](docs/soma.md) | Mutating step sequencer with note and gate mutation probabilities |
+| AE Seq | [AE Seq](docs/ae-seq.md) | Analog-style CV/gate sequencer with independent CV and gate sequence selection, bit depth control |
+| Markov | [Markov](docs/markov.md) | Markov chain melodic generator with 8 behavioral styles and semantic matrix generation |
 
 ## Display and Focus UI
 
@@ -21,7 +21,7 @@ The plugin has two display modes: **Overview** and **Focus**.
 ### Overview Mode
 
 The default view shows all active channels at a glance. Each channel row displays:
-- Channel number (spec slot)
+- Channel number
 - Engine name and status text
 - Step position bar (thin horizontal bar with moving playhead)
 - Current pitch (note name when scale is on, voltage when off)
@@ -79,11 +79,10 @@ Every channel has these common parameters regardless of engine type:
 
 ## Architecture
 
-- **Spec-loadout model**: Up to 8 specification slots, each selecting an engine type. Only active (non-None) slots consume resources.
-- **Dense channel array**: Active specs are packed into a contiguous channel array. Each channel tracks its original spec slot for correct UI labeling.
-- **Dynamic page naming**: Pages are named after the engine type (e.g. "Soma Routing", "Soma"). When multiple channels use the same engine, names are disambiguated ("Soma 1", "Soma 2").
-- **No runtime engine switching**: Engine type is fixed at construct time. This simplifies parameter layout and avoids the complexity of hot-swapping engines.
-- **Per-engine parameter counts**: Each engine defines only the parameters it needs. No placeholder slots.
+- **Single "Channels" spec**: The only specification is the number of channels (1-8), set at instantiation. All memory is allocated for the maximum engine size per channel.
+- **Runtime engine switching**: Each channel has an Engine Type parameter (None/Thorp/Soma/AE Seq/Markov) that can be changed at any time. Switching destroys the old engine and constructs the new one via placement new.
+- **Fixed parameter layout**: Global(5) + Engine Type per channel(N) + (Common(15) + Engine Slots(32)) per channel(N). Unused engine slots are greyed out with placeholder names.
+- **Dynamic page naming**: Pages are named "Ch N Routing" and "Ch N \<Engine\>" (updated live when the engine type changes).
 - **Shared scale system**: All channels share a global root note, octave, and `.scl` scale file. Per-channel "Scale On" toggles whether quantization is applied.
 
 ## Per-Channel Routing
@@ -118,7 +117,7 @@ make all
 ```
 nt_seq.h                  Core declarations, enums, NtSeq struct
 nt_seq.cpp                Plugin entry point and factory
-nt_seq_construct.cpp      Spec-driven channel and parameter building
+nt_seq_construct.cpp      Channel and parameter building
 nt_seq_step.cpp           Audio-rate processing, clock/gate/CV/MIDI output
 nt_seq_draw.cpp           Custom UI: overview and per-channel focus modes
 nt_seq_params.cpp         Parameter change handling and grayouts
@@ -134,8 +133,14 @@ scale/
 clock/
   ClockProcessor.cpp/h    Clock divider
 tests/
-  test_spec_logic.cpp     Unit tests for spec-to-engine mapping and page naming
+  nt_stubs.h              NT API stubs for standalone engine testing
+  test_spec_logic.cpp     Unit tests for spec helpers and page naming
   test_scale_quantizer.cpp  Unit tests for scale degree weighting modes
+  test_clock_processor.cpp  Unit tests for clock divider
+  test_thorp_engine.cpp   Unit tests for Thorp engine
+  test_soma_engine.cpp    Unit tests for Soma engine
+  test_ae_engine.cpp      Unit tests for AE Sequencer engine
+  test_markov_engine.cpp  Unit tests for Markov engine
 ```
 
 ## Compile-Time Safety
@@ -145,7 +150,6 @@ The build enforces several constraints via `static_assert`:
 - Each engine fits within its 2048-byte memory pool slot
 - Each engine's alignment requirement is <= 8 bytes (ARM `strd` safety)
 - Each engine's parameter count is <= 32 (`kMaxEngineParams`)
-- The specifications array size matches `kMaxChannels`
 
 ## License
 
