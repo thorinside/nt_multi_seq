@@ -14,12 +14,17 @@ public:
     int getParameterDefs(_NT_parameter* defs) const override;
     int getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const override;
     const char* name() const override { return "AE Seq"; }
-    void drawFocusDetail(int y1, int y2) const override;
+    void getFocusDetail(FocusDetail& detail) const override;
+    void getFocusBarInfo(FocusBarInfo& info) const override;
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;
-    int previewLength() const;
-    void getPreviewStep(int stepIndex, uint8_t& cvLevel, bool& gateOn) const;
+    int cvStepCount() const;
+    int gateStepCount() const;
+    int currentCvStep() const;
+    int currentGateStep() const;
+    uint8_t getCvLevel(int stepIndex) const;
+    bool getGateOn(int stepIndex) const;
 
     enum Param {
         kAeCvSeq = 0,

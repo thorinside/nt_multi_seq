@@ -18,6 +18,7 @@ SOURCES = \
 	nt_seq_params.cpp \
 	scale/ScaleQuantizer.cpp \
 	clock/ClockProcessor.cpp \
+	engines/FocusData.cpp \
 	engines/SomaEngine.cpp \
 	engines/AeSequencerEngine.cpp \
 	engines/SeqMarkovEngine.cpp \
@@ -41,9 +42,8 @@ CXXFLAGS_ARM = $(CXXFLAGS_COMMON) $(DEFINES_HARDWARE) \
 	-mcpu=cortex-m7 \
 	-mfpu=fpv5-d16 \
 	-mfloat-abi=hard \
-	-O3 \
+	-Os \
 	-ffast-math \
-	-funroll-loops \
 	-fdata-sections \
 	-ffunction-sections
 

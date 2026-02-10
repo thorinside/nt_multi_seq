@@ -10,7 +10,7 @@
 #include "clock/ClockProcessor.h"
 
 // Maximum channels supported
-constexpr int kMaxChannels = 8;
+constexpr int kMaxChannels = 4;
 
 // Maximum parameters any single engine can define
 constexpr int kMaxEngineParams = 32;
@@ -19,7 +19,7 @@ constexpr int kMaxEngineParams = 32;
 constexpr int kParamsPerChannel = 15 + kMaxEngineParams;
 
 // Maximum total parameters (upper bound for array sizing)
-// Global(5) + engine-type-per-channel(8) + per-channel(47) * 8 = 389
+// Global(5) + engine-type-per-channel(4) + per-channel(47) * 4 = 197
 constexpr int kMaxTotalParams = 5 + kMaxChannels + kMaxChannels * kParamsPerChannel;
 
 // Maximum pages: 1 global + 1 engines + 2 per channel (common + engine)
@@ -88,14 +88,14 @@ enum MidiDest {
 };
 
 // --- Specification ---
-// Single spec: number of channels (1-8)
+// Single spec: number of channels (1-4)
 enum SpecIndex {
     SPEC_CHANNELS = 0,
     NUM_SPECS
 };
 
 static const _NT_specification specifications[] = {
-    { .name = "Channels", .min = 1, .max = 8, .def = 1, .type = kNT_typeGeneric },
+    { .name = "Channels", .min = 1, .max = 4, .def = 1, .type = kNT_typeGeneric },
 };
 
 // --- Enum string arrays ---

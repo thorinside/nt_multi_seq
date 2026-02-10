@@ -13,6 +13,41 @@ struct EngineOutput {
     uint8_t midiNote; // MIDI note number (for MIDI output mode)
 };
 
+// --- Focus view data structs (engine -> renderer) ---
+
+static constexpr int kMaxBarSteps = 32;
+static constexpr int kMaxFocusBars = 2;
+
+struct FocusBar {
+    int length;                     // 0 = no bar
+    int playhead;                   // -1 = no playhead
+    uint8_t levels[kMaxBarSteps];   // per-step brightness (1-15)
+};
+
+struct FocusBarInfo {
+    int numBars;
+    FocusBar bars[kMaxFocusBars];
+};
+
+struct FocusDetailLine {
+    char text[64];
+    uint8_t colours[64];  // per-character colour
+    int len;
+
+    void clear() { len = 0; text[0] = 0; }
+    void append(const char* s, uint8_t colour);
+    void appendChar(char c, uint8_t colour);
+    void appendInt(int32_t val, uint8_t colour);
+    void appendFloat(float val, int decimals, uint8_t colour);
+};
+
+struct FocusDetail {
+    FocusDetailLine lines[2];
+};
+
+// Standalone int-to-string for getStatusText (no NT dependency).
+int fmtInt(char* buf, int32_t val);
+
 class SequencerEngine {
 public:
     SequencerEngine() : weightMode_(0) {}
@@ -30,9 +65,26 @@ public:
 
     virtual const char* name() const = 0;
 
-    // Focus view: draw engine-specific detail on two lines.
-    // y1/y2 are Y pixel positions. Default does nothing.
-    virtual void drawFocusDetail(int y1, int y2) const {}
+    // Focus view: fill data structs for rendering by the host.
+    virtual void getFocusDetail(FocusDetail& detail) const {
+        detail.lines[0].clear();
+        detail.lines[1].clear();
+    }
+
+    // Focus bar info: default is a single bar with uniform colour 4 and
+    // the current step highlighted at 15.
+    virtual void getFocusBarInfo(FocusBarInfo& info) const {
+        int len = sequenceLength();
+        int step = currentStep();
+        info.numBars = 1;
+        FocusBar& bar = info.bars[0];
+        bar.length = len;
+        bar.playhead = step;
+        for (int i = 0; i < len && i < kMaxBarSteps; ++i)
+            bar.levels[i] = 4;
+        if (step >= 0 && step < kMaxBarSteps)
+            bar.levels[step] = 15;
+    }
 
     // UI support: step position and status text
     virtual int currentStep() const { return -1; }

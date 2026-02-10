@@ -63,4 +63,7 @@ bool _NT_jsonParse::string(const char*&) { return false; }
 bool _NT_jsonParse::boolean(bool&) { return false; }
 bool _NT_jsonParse::null() { return false; }
 
+// FocusDetailLine / fmtInt implementations (engines use these, no NT dependency)
+#include "../engines/FocusData.cpp"
+
 #endif // NT_STUBS_H

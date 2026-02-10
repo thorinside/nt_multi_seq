@@ -125,7 +125,7 @@ static void test_pageNameBuild()
 
 // --- Test: engine pool alignment ---
 
-static const int kMaxChannels = 8;
+static const int kMaxChannels = 4;
 static const int kPoolSlotSize = 2048;
 static const int kPoolAlignment = 8;
 
@@ -165,9 +165,9 @@ static void test_paramLayout()
     int total1 = numGlobal + 1 + 1 * paramsPerCh;
     ASSERT_EQ(total1, 53, "1 channel total = 53");
 
-    // 8 channels: 5 + 8 + 8*47 = 389
-    int total8 = numGlobal + 8 + 8 * paramsPerCh;
-    ASSERT_EQ(total8, 389, "8 channel total = 389");
+    // 4 channels: 5 + 4 + 4*47 = 197
+    int total4 = numGlobal + 4 + 4 * paramsPerCh;
+    ASSERT_EQ(total4, 197, "4 channel total = 197");
 
     // Engine type param indices for 4 channels: 5, 6, 7, 8
     for (int ch = 0; ch < 4; ++ch) {

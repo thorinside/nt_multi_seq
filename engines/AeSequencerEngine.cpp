@@ -213,46 +213,34 @@ int AeSequencerEngine::getParameterDefs(_NT_parameter* defs) const
 int AeSequencerEngine::currentStep() const { return voltSeqs_[cvSeq_].currentStep; }
 int AeSequencerEngine::sequenceLength() const { return cvSteps_; }
 
-int AeSequencerEngine::previewLength() const
+int AeSequencerEngine::cvStepCount() const
 {
-    int cvLen = cvSteps_;
-    if (cvLen < 1) cvLen = 1;
-    if (cvLen > kMaxSteps) cvLen = kMaxSteps;
-
-    int gateLen = gateSteps_;
-    if (gateLen < 1) gateLen = 1;
-    if (gateLen > kMaxSteps) gateLen = kMaxSteps;
-
-    return (cvLen > gateLen) ? cvLen : gateLen;
+    int n = cvSteps_;
+    if (n < 1) n = 1;
+    if (n > kMaxSteps) n = kMaxSteps;
+    return n;
 }
 
-void AeSequencerEngine::getPreviewStep(int stepIndex, uint8_t& cvLevel, bool& gateOn) const
+int AeSequencerEngine::gateStepCount() const
 {
-    cvLevel = 0;
-    gateOn = false;
+    int n = gateSteps_;
+    if (n < 1) n = 1;
+    if (n > kMaxSteps) n = kMaxSteps;
+    return n;
+}
 
-    int length = previewLength();
-    if (length <= 0)
-        return;
+int AeSequencerEngine::currentCvStep() const { return voltSeqs_[cvSeq_].currentStep; }
+int AeSequencerEngine::currentGateStep() const { return gateSeqs_[gateSeq_].currentStep; }
 
-    int idx = stepIndex;
-    if (idx < 0) idx = 0;
-    idx %= length;
-
-    int cvLen = cvSteps_;
-    if (cvLen < 1) cvLen = 1;
-    if (cvLen > kMaxSteps) cvLen = kMaxSteps;
-    int cvIdx = idx % cvLen;
-
-    int gateLen = gateSteps_;
-    if (gateLen < 1) gateLen = 1;
-    if (gateLen > kMaxSteps) gateLen = kMaxSteps;
-    int gateIdx = idx % gateLen;
+uint8_t AeSequencerEngine::getCvLevel(int stepIndex) const
+{
+    int cvLen = cvStepCount();
+    int idx = stepIndex % cvLen;
 
     float effMin, effMax;
     getEffectiveRange(effMin, effMax);
 
-    int16_t cvRaw = sequenceRaw(voltSeqs_[cvSeq_].seed, cvIdx);
+    int16_t cvRaw = sequenceRaw(voltSeqs_[cvSeq_].seed, idx);
     float voltage = mapRawToVoltage(cvRaw, effMin, effMax);
     float quantized = quantizeVoltage(voltage, effMin, effMax);
 
@@ -266,11 +254,17 @@ void AeSequencerEngine::getPreviewStep(int stepIndex, uint8_t& cvLevel, bool& ga
         if (quantIdx < 0) quantIdx = 0;
         if (quantIdx > levels) quantIdx = levels;
     }
-    cvLevel = (uint8_t)((quantIdx * 15 + (levels / 2)) / levels);
+    return (uint8_t)((quantIdx * 15 + (levels / 2)) / levels);
+}
 
-    int gateRaw = (int)sequenceRaw(gateSeqs_[gateSeq_].seed, gateIdx);
+bool AeSequencerEngine::getGateOn(int stepIndex) const
+{
+    int gateLen = gateStepCount();
+    int idx = stepIndex % gateLen;
+
+    int gateRaw = (int)sequenceRaw(gateSeqs_[gateSeq_].seed, idx);
     int gateNorm = ((gateRaw + 32768) * 100) / 65535; // 0..100
-    gateOn = (gateNorm >= threshold_);
+    return (gateNorm >= threshold_);
 }
 
 int AeSequencerEngine::getStatusText(char* buf, int maxLen) const
@@ -278,49 +272,69 @@ int AeSequencerEngine::getStatusText(char* buf, int maxLen) const
     // Show "V1 G1 8/16"
     int len = 0;
     if (len < maxLen - 1) buf[len++] = 'V';
-    len += NT_intToString(buf + len, (int32_t)(cvSeq_ + 1));
+    len += fmtInt(buf + len, (int32_t)(cvSeq_ + 1));
     if (len < maxLen - 2) { buf[len++] = ' '; buf[len++] = 'G'; }
-    len += NT_intToString(buf + len, (int32_t)(gateSeq_ + 1));
+    len += fmtInt(buf + len, (int32_t)(gateSeq_ + 1));
     if (len < maxLen - 1) buf[len++] = ' ';
-    len += NT_intToString(buf + len, (int32_t)cvSteps_);
+    len += fmtInt(buf + len, (int32_t)cvSteps_);
     if (len < maxLen - 1) buf[len++] = '/';
-    len += NT_intToString(buf + len, (int32_t)gateSteps_);
+    len += fmtInt(buf + len, (int32_t)gateSteps_);
     buf[len] = 0;
     return len;
 }
 
-void AeSequencerEngine::drawFocusDetail(int y1, int y2) const
+void AeSequencerEngine::getFocusBarInfo(FocusBarInfo& info) const
 {
-    char buf[64];
-    int len = 0;
-    const char* s;
+    int cvLen = cvStepCount();
+    int gateLen = gateStepCount();
+
+    info.numBars = 2;
+
+    // CV bar: brightness from CV level, minimum 2 so steps are visible
+    FocusBar& cvBar = info.bars[0];
+    cvBar.length = cvLen;
+    cvBar.playhead = currentCvStep();
+    for (int i = 0; i < cvLen && i < kMaxBarSteps; ++i) {
+        int lv = getCvLevel(i);
+        cvBar.levels[i] = (uint8_t)(lv < 2 ? 2 : lv);
+    }
+
+    // Gate bar: on = bright (12), off = dim (2)
+    FocusBar& gateBar = info.bars[1];
+    gateBar.length = gateLen;
+    gateBar.playhead = currentGateStep();
+    for (int i = 0; i < gateLen && i < kMaxBarSteps; ++i)
+        gateBar.levels[i] = getGateOn(i) ? 12 : 2;
+}
+
+void AeSequencerEngine::getFocusDetail(FocusDetail& detail) const
+{
+    FocusDetailLine& line1 = detail.lines[0];
+    FocusDetailLine& line2 = detail.lines[1];
+    line1.clear();
+    line2.clear();
 
     // Line 1: CV Seq:1 Steps:8  Gate Seq:1 Steps:16
-    s = "CV Seq:"; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, cvSeq_);
-    s = " Steps:"; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, cvSteps_);
-    s = "  Gate Seq:"; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, gateSeq_);
-    s = " Steps:"; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, gateSteps_);
-    buf[len] = 0;
-    NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+    line1.append("CV Seq:", 8);
+    line1.appendInt(cvSeq_, 8);
+    line1.append(" Steps:", 8);
+    line1.appendInt(cvSteps_, 8);
+    line1.append("  Gate Seq:", 8);
+    line1.appendInt(gateSeq_, 8);
+    line1.append(" Steps:", 8);
+    line1.appendInt(gateSteps_, 8);
 
     // Line 2: Range: -1.0..+1.0V  Bits:16  Thresh:50%
-    len = 0;
-    s = "Range:"; while (*s) buf[len++] = *s++;
-    len += NT_floatToString(buf + len, (float)minCv_ / 10.0f, 1);
-    s = ".."; while (*s) buf[len++] = *s++;
-    len += NT_floatToString(buf + len, (float)maxCv_ / 10.0f, 1);
-    buf[len++] = 'V';
-    s = "  Bits:"; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, bitDepth_);
-    s = "  Thresh:"; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, threshold_);
-    buf[len++] = '%';
-    buf[len] = 0;
-    NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
+    line2.append("Range:", 6);
+    line2.appendFloat((float)minCv_ / 10.0f, 1, 6);
+    line2.append("..", 6);
+    line2.appendFloat((float)maxCv_ / 10.0f, 1, 6);
+    line2.appendChar('V', 6);
+    line2.append("  Bits:", 6);
+    line2.appendInt(bitDepth_, 6);
+    line2.append("  Thresh:", 6);
+    line2.appendInt(threshold_, 6);
+    line2.appendChar('%', 6);
 }
 
 int AeSequencerEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const

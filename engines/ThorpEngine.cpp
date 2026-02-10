@@ -620,45 +620,42 @@ int ThorpEngine::getStatusText(char* buf, int maxLen) const
     while (*mode && len < maxLen - 1) buf[len++] = *mode++;
     if (len < maxLen - 2) buf[len++] = ' ';
     if (len < maxLen - 2) buf[len++] = 'S';
-    if (len < maxLen - 2) len += NT_intToString(buf + len, arpSlot_);
+    if (len < maxLen - 2) len += fmtInt(buf + len, arpSlot_);
     buf[len] = 0;
     return len;
 }
 
-void ThorpEngine::drawFocusDetail(int y1, int y2) const
+void ThorpEngine::getFocusDetail(FocusDetail& detail) const
 {
-    char buf[64];
-    int len = 0;
-    const char* s;
+    FocusDetailLine& line1 = detail.lines[0];
+    FocusDetailLine& line2 = detail.lines[1];
+    line1.clear();
+    line2.clear();
 
-    // Line 1: Play mode, Slot, Step/Length, Seq mode
-    s = kPlayModeStrings[playMode_];
-    if (s) while (*s && len < 10) buf[len++] = *s++;
+    // Line 1: Play mode, Slot, Step/Length, Seq mode (single colour)
+    const char* s = kPlayModeStrings[playMode_];
+    if (s) line1.append(s, 8);
 
-    s = "  Slot:"; while (*s) buf[len++] = *s++;
+    line1.append("  Slot:", 8);
     if (playMode_ == kPlaySong)
-        len += NT_intToString(buf + len, uiPlayingSlot());
+        line1.appendInt(uiPlayingSlot(), 8);
     else
-        len += NT_intToString(buf + len, arpSlot_);
+        line1.appendInt(arpSlot_, 8);
 
-    s = "  Step:"; while (*s) buf[len++] = *s++;
+    line1.append("  Step:", 8);
     int step = currentStep();
     if (step >= 0)
-        len += NT_intToString(buf + len, step + 1);
+        line1.appendInt(step + 1, 8);
     else
-        buf[len++] = '0';
-    buf[len++] = '/';
-    len += NT_intToString(buf + len, sequenceLength());
+        line1.appendChar('0', 8);
+    line1.appendChar('/', 8);
+    line1.appendInt(sequenceLength(), 8);
 
-    s = "  Seq:"; while (*s) buf[len++] = *s++;
+    line1.append("  Seq:", 8);
     s = kSequenceModeStrings[sequenceMode_];
-    if (s) while (*s && len < 55) buf[len++] = *s++;
-    buf[len] = 0;
-    NT_drawText(0, y1, buf, 8, kNT_textLeft, kNT_textTiny);
+    if (s) line1.append(s, 8);
 
-    // Line 2: Chain visualization with current position bracketed
-    len = 0;
-    s = "Chain"; while (*s) buf[len++] = *s++;
+    // Line 2: Chain visualization with per-char brightness for current position
     int chainLength = uiChainLength();
     int cursorPos;
     if (playMode_ == kPlaySong)
@@ -666,11 +663,11 @@ void ThorpEngine::drawFocusDetail(int y1, int y2) const
     else
         cursorPos = chainLength - 1;
 
-    buf[len++] = '[';
-    len += NT_intToString(buf + len, chainLength);
-    buf[len++] = ']';
-    buf[len++] = ':';
+    // Prefix: "Chain:N"
+    line2.append("Chain:", 5);
+    line2.appendInt(chainLength, 5);
 
+    // Windowing for long chains
     int windowStart = 0;
     int windowEnd = chainLength;
     const int maxVisible = 10;
@@ -683,24 +680,25 @@ void ThorpEngine::drawFocusDetail(int y1, int y2) const
             windowStart = windowEnd - maxVisible;
             if (windowStart < 0) windowStart = 0;
         }
-        if (windowStart > 0 && len < 56) {
-            s = ".."; while (*s && len < 56) buf[len++] = *s++;
+        if (windowStart > 0)
+            line2.append(" ..", 5);
+    }
+
+    // Each chain item: " NN" (right-justified to 3 chars)
+    for (int i = windowStart; i < windowEnd; ++i) {
+        int val = uiChainSlotAt(i);
+        uint8_t colour = (i == cursorPos) ? 15 : 5;
+        if (val < 10) {
+            line2.append("  ", colour);
+            line2.appendInt(val, colour);
+        } else {
+            line2.appendChar(' ', colour);
+            line2.appendInt(val, colour);
         }
     }
 
-    for (int i = windowStart; i < windowEnd && len < 56; ++i) {
-        buf[len++] = ' ';
-        if (i == cursorPos && len < 55)
-            buf[len++] = '[';
-        len += NT_intToString(buf + len, uiChainSlotAt(i));
-        if (i == cursorPos && len < 58)
-            buf[len++] = ']';
-    }
-    if (windowEnd < chainLength && len < 58) {
-        s = " .."; while (*s && len < 60) buf[len++] = *s++;
-    }
-    buf[len] = 0;
-    NT_drawText(0, y2, buf, 6, kNT_textLeft, kNT_textTiny);
+    if (windowEnd < chainLength)
+        line2.append(" ..", 5);
 }
 
 int ThorpEngine::midiInputChannel() const

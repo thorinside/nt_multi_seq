@@ -42,67 +42,78 @@ static int formatPitch(char* buf, float pitch, bool scaleEnabled, int rootNote, 
     }
 }
 
-// Draw step position bar (thin horizontal bar with playhead)
-static void drawStepBar(int x, int y, int w, int h, int step, int length)
+// Generic renderer: draw segmented bars from FocusBarInfo data.
+static void drawFocusBars(int x, int y, int w, int h, const FocusBarInfo& info)
 {
-    if (length <= 0) return;
-    // Background bar
-    NT_drawShapeI(kNT_rectangle, x, y, x + w - 1, y + h - 1, 2);
-    // Playhead
-    if (step >= 0) {
-        int px = x + (step * (w - 1)) / (length > 1 ? length - 1 : 1);
-        NT_drawShapeI(kNT_rectangle, px, y, px + 1, y + h - 1, 15);
+    if (info.numBars <= 0) return;
+
+    int gap = (info.numBars > 1) ? 1 : 0;
+    int barH = (h - gap * (info.numBars - 1)) / info.numBars;
+    if (barH < 2) barH = 2;
+
+    for (int b = 0; b < info.numBars && b < kMaxFocusBars; ++b) {
+        const FocusBar& bar = info.bars[b];
+        if (bar.length <= 0) continue;
+
+        int by = y + b * (barH + gap);
+
+        // Background
+        NT_drawShapeI(kNT_rectangle, x, by, x + w - 1, by + barH - 1, 1);
+
+        // Per-step segments
+        int segW = w / bar.length;
+        if (segW < 2) segW = 2;
+
+        for (int i = 0; i < bar.length && i < kMaxBarSteps && i * segW < w; ++i) {
+            int sx0 = x + i * segW;
+            int sx1 = sx0 + segW - 2;
+            if (sx1 >= x + w) sx1 = x + w - 1;
+            if (sx1 < sx0) sx1 = sx0;
+            int colour = (int)bar.levels[i];
+            if (colour < 1) colour = 1;
+            NT_drawShapeI(kNT_rectangle, sx0, by, sx1, by + barH - 1, colour);
+        }
+
+        // Playhead: white underline beneath the current step segment
+        if (bar.playhead >= 0) {
+            int ph = bar.playhead % bar.length;
+            int sx0 = x + ph * segW;
+            int sx1 = sx0 + segW - 2;
+            if (sx1 >= x + w) sx1 = x + w - 1;
+            if (sx1 < sx0) sx1 = sx0;
+            NT_drawShapeI(kNT_line, sx0, by + barH, sx1, by + barH, 15);
+        }
     }
 }
 
-// Draw step bar with per-step segments (for focus mode with short sequences)
-static void drawStepBarSegmented(int x, int y, int w, int h, int step, int length)
+// Render FocusDetail lines: groups same-colour character runs into single
+// NT_drawText calls. Tiny font = 4px per character.
+static void drawFocusDetailLines(int y1, int y2, const FocusDetail& detail)
 {
-    if (length <= 0) return;
-    // Background
-    NT_drawShapeI(kNT_rectangle, x, y, x + w - 1, y + h - 1, 2);
-    // Per-step segments
-    int segW = w / length;
-    if (segW < 2) segW = 2;
-    for (int i = 0; i < length && i * segW < w; ++i) {
-        int sx = x + i * segW;
-        int colour = (i == step) ? 15 : 4;
-        NT_drawShapeI(kNT_rectangle, sx, y, sx + segW - 2, y + h - 1, colour);
-    }
-}
+    const int yPos[2] = { y1, y2 };
 
-// AE focus bar: gate-on steps are visible; fill brightness follows
-// quantized CV level (0..15).
-static void drawAeStepBar(int x, int y, int w, int h, AeSequencerEngine* ae, int playhead)
-{
-    if (!ae) return;
-    int length = ae->previewLength();
-    if (length <= 0) return;
+    for (int lineIdx = 0; lineIdx < 2; ++lineIdx) {
+        const FocusDetailLine& line = detail.lines[lineIdx];
+        if (line.len <= 0) continue;
 
-    NT_drawShapeI(kNT_rectangle, x, y, x + w - 1, y + h - 1, 1);
+        int i = 0;
+        while (i < line.len) {
+            // Find run of same colour
+            uint8_t colour = line.colours[i];
+            int start = i;
+            while (i < line.len && line.colours[i] == colour)
+                ++i;
 
-    int segW = w / length;
-    if (segW < 2) segW = 2;
+            // Extract substring for this run
+            char buf[65];
+            int runLen = i - start;
+            for (int j = 0; j < runLen; ++j)
+                buf[j] = line.text[start + j];
+            buf[runLen] = 0;
 
-    for (int i = 0; i < length && i * segW < w; ++i) {
-        uint8_t cvLevel = 0;
-        bool gateOn = false;
-        ae->getPreviewStep(i, cvLevel, gateOn);
-
-        int sx0 = x + i * segW;
-        int sx1 = sx0 + segW - 2;
-        if (sx1 >= x + w) sx1 = x + w - 1;
-        if (sx1 < sx0) sx1 = sx0;
-
-        int colour = gateOn ? (int)cvLevel : 1;
-        if (gateOn && colour < 2) colour = 2;
-        NT_drawShapeI(kNT_rectangle, sx0, y, sx1, y + h - 1, colour);
-    }
-
-    if (playhead >= 0) {
-        int ph = playhead % length;
-        int px = x + (ph * w) / length;
-        NT_drawShapeI(kNT_line, px, y, px, y + h - 1, 15);
+            int xPos = start * 4; // tiny font: 4px per char
+            NT_drawText(xPos, yPos[lineIdx], buf, colour, kNT_textLeft, kNT_textTiny);
+        }
     }
 }
 
@@ -167,11 +178,18 @@ static void drawOverview(NtSeq* alg)
             NT_drawText(40, y, buf, 8, kNT_textLeft, kNT_textTiny);
         }
 
-        // Step position bar
+        // Step position bar (simple background + playhead)
+        // Tiny font baseline is y; glyphs span ~y-6 to y.
         if (eng) {
             int step = eng->currentStep();
             int length = eng->sequenceLength();
-            drawStepBar(95, y - 1, 64, 5, step, length);
+            if (length > 0) {
+                NT_drawShapeI(kNT_rectangle, 95, y - 5, 95 + 64 - 1, y - 1, 2);
+                if (step >= 0) {
+                    int px = 95 + (step * 63) / (length > 1 ? length - 1 : 1);
+                    NT_drawShapeI(kNT_rectangle, px, y - 5, px + 1, y - 1, 15);
+                }
+            }
         }
 
         // Pitch display
@@ -181,7 +199,7 @@ static void drawOverview(NtSeq* alg)
 
         // Gate indicator
         if (alg->channels[ch].cachedGate > 0.0f) {
-            NT_drawShapeI(kNT_rectangle, 208, y - 1, 213, y + 4, 15);
+            NT_drawShapeI(kNT_rectangle, 208, y - 5, 213, y - 1, 15);
         }
 
         y += 9;
@@ -243,18 +261,12 @@ static void drawFocus(NtSeq* alg, int focusCh)
 
     // --- Line 2 (y=10): Step bar + step counter ---
     {
+        FocusBarInfo barInfo;
+        eng->getFocusBarInfo(barInfo);
+        drawFocusBars(0, 10, 230, 7, barInfo);
+
         int step = eng->currentStep();
         int length = eng->sequenceLength();
-
-        if (alg->channels[focusCh].engineType == kEngineAeSeq) {
-            AeSequencerEngine* ae = static_cast<AeSequencerEngine*>(eng);
-            drawAeStepBar(0, 10, 230, 7, ae, step);
-            length = ae->previewLength();
-        } else if (length > 0 && length <= 64) {
-            drawStepBarSegmented(0, 10, 230, 7, step, length);
-        } else if (length > 0) {
-            drawStepBar(0, 10, 230, 7, step, length);
-        }
 
         // Step counter right-aligned
         len = 0;
@@ -282,7 +294,11 @@ static void drawFocus(NtSeq* alg, int focusCh)
     NT_drawText(0, 25, buf, 10, kNT_textLeft, kNT_textTiny);
 
     // --- Lines 4-5 (y=31, y=39): Engine-specific params ---
-    eng->drawFocusDetail(33, 41);
+    {
+        FocusDetail detail;
+        eng->getFocusDetail(detail);
+        drawFocusDetailLines(33, 41, detail);
+    }
 
     // --- Separator line (y=48) ---
     NT_drawShapeI(kNT_line, 0, 48, 255, 48, 4);
