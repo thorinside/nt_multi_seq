@@ -270,10 +270,11 @@ int parameterUiPrefix(_NT_algorithm* self, int p, char* buff)
     if (p < kNumGlobalParams)
         return 0;
 
+    int numCh = (int)alg->numChannels;
+
     // Engine Type params: indices kNumGlobalParams..kNumGlobalParams+numChannels-1
-    // Prefix with "N:" where N is channel number (1-based)
     int engineTypeFirst = kNumGlobalParams;
-    int engineTypeLast = kNumGlobalParams + (int)alg->numChannels;
+    int engineTypeLast = engineTypeFirst + numCh;
     if (p >= engineTypeFirst && p < engineTypeLast) {
         int ch = p - engineTypeFirst;
         int len = NT_intToString(buff, ch + 1);
@@ -282,7 +283,18 @@ int parameterUiPrefix(_NT_algorithm* self, int p, char* buff)
         return len;
     }
 
-    // Per-channel params: no prefix needed (page names identify the channel)
+    // Per-channel common + engine params: prefix with "N:"
+    int perChannelStart = engineTypeLast;
+    if (p >= perChannelStart) {
+        int ch = (p - perChannelStart) / kParamsPerChannel;
+        if (ch < numCh) {
+            int len = NT_intToString(buff, ch + 1);
+            buff[len++] = ':';
+            buff[len] = 0;
+            return len;
+        }
+    }
+
     return 0;
 }
 

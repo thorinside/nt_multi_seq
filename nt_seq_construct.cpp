@@ -23,25 +23,19 @@ static_assert(ThorpEngine::kNumThorpParams <= kMaxEngineParams, "ThorpEngine has
 static_assert(ARRAY_SIZE(specifications) == NUM_SPECS, "specifications array must match NUM_SPECS");
 
 // Per-channel common parameters (static definitions as templates)
-// Max bus index — NT_PARAMETER_IO hardcodes 28; override to match current AUX bus count.
-static constexpr int kMaxBus = 64;
-
 static const _NT_parameter channelCommonParams[] = {
-    { .name = "Clock In",     .min = 0, .max = kMaxBus, .def = 1,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
-    { .name = "Reset In",     .min = 0, .max = kMaxBus, .def = 2,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
-    { .name = "Routing",      .min = 0, .max = kNumRoutings - 1, .def = kRoutingCV, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = routingStrings },
-    { .name = "Gate Out",     .min = 0, .max = kMaxBus, .def = 14, .unit = kNT_unitCvOutput,   .scaling = 0, .enumStrings = nullptr },
-    { .name = "Gate mode",    .min = 0, .max = 1,       .def = 0,  .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
-    { .name = "Pitch Out",    .min = 0, .max = kMaxBus, .def = 15, .unit = kNT_unitCvOutput,   .scaling = 0, .enumStrings = nullptr },
-    { .name = "Pitch mode",   .min = 0, .max = 1,       .def = 0,  .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
-    { .name = "Velocity Out", .min = 0, .max = kMaxBus, .def = 16, .unit = kNT_unitCvOutput,   .scaling = 0, .enumStrings = nullptr },
-    { .name = "Velocity mode",.min = 0, .max = 1,       .def = 0,  .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
-    { .name = "MIDI Ch",      .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
-    { .name = "MIDI Dest",    .min = 0, .max = kNumMidiDests - 1, .def = kMidiDestBreakout, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = midiDestStrings },
-    { .name = "Clock Div",    .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
-    { .name = "Scale On",     .min = 0, .max = 1,  .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = offOnStrings },
-    { .name = "Note Gate In", .min = 0, .max = kMaxBus, .def = 3,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
-    { .name = "Note CV In",   .min = 0, .max = kMaxBus, .def = 4,  .unit = kNT_unitCvInput,    .scaling = 0, .enumStrings = nullptr },
+    NT_PARAMETER_CV_INPUT("Clock In", 0, 1)
+    NT_PARAMETER_CV_INPUT("Reset In", 0, 2)
+    { .name = "Routing", .min = 0, .max = kNumRoutings - 1, .def = kRoutingCV, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = routingStrings },
+    NT_PARAMETER_CV_OUTPUT_WITH_MODE("Gate Out", 0, 14)
+    NT_PARAMETER_CV_OUTPUT_WITH_MODE("Pitch Out", 0, 15)
+    NT_PARAMETER_CV_OUTPUT_WITH_MODE("Velocity Out", 0, 16)
+    { .name = "MIDI Ch", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
+    { .name = "MIDI Dest", .min = 0, .max = kNumMidiDests - 1, .def = kMidiDestBreakout, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = midiDestStrings },
+    { .name = "Clock Div", .min = 1, .max = 16, .def = 1, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = offOnStrings },
+    NT_PARAMETER_CV_INPUT("Note Gate In", 0, 3)
+    NT_PARAMETER_CV_INPUT("Note CV In", 0, 4)
 };
 static_assert(sizeof(channelCommonParams) / sizeof(channelCommonParams[0]) == kNumChannelCommonParams, "Channel param count mismatch");
 
@@ -214,11 +208,9 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         pageIdx++;
     }
 
-    // Per-channel pages
+    // Build page names for all channels
     for (int ch = 0; ch < numChannels; ++ch) {
         int nameBufBase = ch * 2;
-
-        // Build initial page names: "Ch N Routing" and "Ch N"
         {
             char* buf = alg->pageNameBufs[nameBufBase];
             int len = strCopy(buf, "Ch ", 3);
@@ -232,13 +224,15 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             len += NT_intToString(buf + len, ch + 1);
             buf[len] = 0;
         }
+    }
 
-        // Channel routing page
+    // All routing pages first
+    for (int ch = 0; ch < numChannels; ++ch) {
         uint8_t* chPageIdx = &alg->pageIndices[idxOffset];
         for (int i = 0; i < kNumChannelCommonParams; ++i)
             chPageIdx[i] = (uint8_t)(alg->channels[ch].paramBase + i);
         alg->pageDefs[pageIdx] = {
-            .name = alg->pageNameBufs[nameBufBase],
+            .name = alg->pageNameBufs[ch * 2],
             .numParams = kNumChannelCommonParams,
             .group = kPageGroupRouting,
             .unused = {0, 0},
@@ -246,14 +240,15 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         };
         idxOffset += kNumChannelCommonParams;
         pageIdx++;
+    }
 
-        // Channel engine page — all 32 slots (greyed out initially for None)
+    // Then all engine pages
+    for (int ch = 0; ch < numChannels; ++ch) {
         uint8_t* engPageIdx = &alg->pageIndices[idxOffset];
         for (int i = 0; i < kMaxEngineParams; ++i)
             engPageIdx[i] = (uint8_t)(alg->channels[ch].engineParamBase + i);
-
         alg->pageDefs[pageIdx] = {
-            .name = alg->pageNameBufs[nameBufBase + 1],
+            .name = alg->pageNameBufs[ch * 2 + 1],
             .numParams = (uint8_t)kMaxEngineParams,
             .group = kPageGroupEngine,
             .unused = {0, 0},
