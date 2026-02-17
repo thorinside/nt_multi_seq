@@ -249,7 +249,7 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             engPageIdx[i] = (uint8_t)(alg->channels[ch].engineParamBase + i);
         alg->pageDefs[pageIdx] = {
             .name = alg->pageNameBufs[ch * 2 + 1],
-            .numParams = (uint8_t)kMaxEngineParams,
+            .numParams = 0,
             .group = kPageGroupEngine,
             .unused = {0, 0},
             .params = engPageIdx
@@ -286,10 +286,6 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiChannel) + paramOffset, true);
             NT_setParameterGrayedOut(algIdx, (uint32_t)(base + kChMidiDest) + paramOffset, true);
 
-            // Grey out all engine param slots (None engine)
-            int engBase = alg->channels[ch].engineParamBase;
-            for (int i = 0; i < kMaxEngineParams; ++i)
-                NT_setParameterGrayedOut(algIdx, (uint32_t)(engBase + i) + paramOffset, true);
         }
     }
 

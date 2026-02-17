@@ -120,14 +120,16 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
         NT_updateParameterDefinition(algIdx, engBase + i);
     }
 
-    // Reset values to defaults and set greyouts
-    for (int i = 0; i < kMaxEngineParams; ++i) {
-        bool unused = (i >= numEngineDefs);
-        int16_t defVal = unused ? 0 : alg->paramDefs[engBase + i].def;
-        NT_setParameterFromAudio((uint32_t)algIdx, (uint32_t)(engBase + i) + paramOffset, defVal);
-        NT_setParameterGrayedOut(algIdx, (uint32_t)(engBase + i) + paramOffset, unused);
+    // Reset values to defaults for active params
+    for (int i = 0; i < numEngineDefs; ++i) {
+        NT_setParameterFromAudio((uint32_t)algIdx, (uint32_t)(engBase + i) + paramOffset, alg->paramDefs[engBase + i].def);
     }
     alg->switchingEngine = false;
+
+    // Update engine page size and notify host
+    int enginePageIndex = alg->channels[ch].enginePageIndex;
+    alg->pageDefs[enginePageIndex].numParams = (uint8_t)numEngineDefs;
+    NT_updateParameterPages(algIdx);
 
     // Update engine page name: "Ch N <Engine>" or "Ch N" for None
     {
