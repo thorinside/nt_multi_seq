@@ -126,10 +126,11 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
     }
     alg->switchingEngine = false;
 
-    // Update engine page size and notify host
+    // Update engine page size; notify host only after init is complete
     int enginePageIndex = alg->channels[ch].enginePageIndex;
     alg->pageDefs[enginePageIndex].numParams = (uint8_t)numEngineDefs;
-    NT_updateParameterPages(algIdx);
+    if (alg->initDone)
+        NT_updateParameterPages(algIdx);
 
     // Update engine page name: "Ch N <Engine>" or "Ch N" for None
     {

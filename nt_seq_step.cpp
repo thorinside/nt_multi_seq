@@ -20,7 +20,13 @@ static inline float* busPtr(float* busFrames, int busIndex, int numFrames)
 void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
-    alg->initDone = true;
+    if (!alg->initDone) {
+        alg->initDone = true;
+        // Notify host of pages built during preset restore
+        int algIdx = NT_algorithmIndex(self);
+        if (algIdx >= 0)
+            NT_updateParameterPages(algIdx);
+    }
     int numFrames = numFramesBy4 * 4;
 
     // --- SD card mount detection ---
