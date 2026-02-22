@@ -191,7 +191,7 @@ void ScaleQuantizer::computeNoteWeights(float* weights, int numDegrees, WeightMo
                     break;
                 }
             }
-            weights[i] = isMajor ? 1.0f : charWeight;
+            weights[i] = isMajor ? charWeight : 1.0f;
         }
         return;
     }
@@ -215,7 +215,7 @@ void ScaleQuantizer::computeNoteWeights(float* weights, int numDegrees, WeightMo
                 }
             }
             bool consonant = (bestDist <= 20.0 && bestPQ <= 18);
-            weights[i] = consonant ? 1.0f : charWeight;
+            weights[i] = consonant ? charWeight : 1.0f;
         }
         return;
     }

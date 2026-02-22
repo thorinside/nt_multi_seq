@@ -138,21 +138,22 @@ static void test_majorWeights_12TET()
     float weights[12];
     sq.computeNoteWeights(weights, 12, ScaleQuantizer::kWeightMajor);
 
-    // Major degrees (in 12-TET, degree 0 = 0 cents = C)
-    ASSERT_NEAR(weights[0], 1.0f, 0.01f, "Major: degree 0 (C) = 1");
-    ASSERT_NEAR(weights[2], 1.0f, 0.01f, "Major: degree 2 (D) = 1");
-    ASSERT_NEAR(weights[4], 1.0f, 0.01f, "Major: degree 4 (E) = 1");
-    ASSERT_NEAR(weights[5], 1.0f, 0.01f, "Major: degree 5 (F) = 1");
-    ASSERT_NEAR(weights[7], 1.0f, 0.01f, "Major: degree 7 (G) = 1");
-    ASSERT_NEAR(weights[9], 1.0f, 0.01f, "Major: degree 9 (A) = 1");
-    ASSERT_NEAR(weights[11], 1.0f, 0.01f, "Major: degree 11 (B) = 1");
+    // Major degrees get charWeight (3.0), non-major get 1.0
+    // Characteristic notes attract: higher weight = larger warp zone
+    ASSERT_NEAR(weights[0], 3.0f, 0.01f, "Major: degree 0 (C) = 3");
+    ASSERT_NEAR(weights[2], 3.0f, 0.01f, "Major: degree 2 (D) = 3");
+    ASSERT_NEAR(weights[4], 3.0f, 0.01f, "Major: degree 4 (E) = 3");
+    ASSERT_NEAR(weights[5], 3.0f, 0.01f, "Major: degree 5 (F) = 3");
+    ASSERT_NEAR(weights[7], 3.0f, 0.01f, "Major: degree 7 (G) = 3");
+    ASSERT_NEAR(weights[9], 3.0f, 0.01f, "Major: degree 9 (A) = 3");
+    ASSERT_NEAR(weights[11], 3.0f, 0.01f, "Major: degree 11 (B) = 3");
 
-    // Non-major (characteristic)
-    ASSERT_NEAR(weights[1], 3.0f, 0.01f, "Major: degree 1 (C#) = 3");
-    ASSERT_NEAR(weights[3], 3.0f, 0.01f, "Major: degree 3 (Eb) = 3");
-    ASSERT_NEAR(weights[6], 3.0f, 0.01f, "Major: degree 6 (F#) = 3");
-    ASSERT_NEAR(weights[8], 3.0f, 0.01f, "Major: degree 8 (Ab) = 3");
-    ASSERT_NEAR(weights[10], 3.0f, 0.01f, "Major: degree 10 (Bb) = 3");
+    // Non-major degrees get base weight 1.0
+    ASSERT_NEAR(weights[1], 1.0f, 0.01f, "Major: degree 1 (C#) = 1");
+    ASSERT_NEAR(weights[3], 1.0f, 0.01f, "Major: degree 3 (Eb) = 1");
+    ASSERT_NEAR(weights[6], 1.0f, 0.01f, "Major: degree 6 (F#) = 1");
+    ASSERT_NEAR(weights[8], 1.0f, 0.01f, "Major: degree 8 (Ab) = 1");
+    ASSERT_NEAR(weights[10], 1.0f, 0.01f, "Major: degree 10 (Bb) = 1");
 }
 
 static void test_majorWeights_nonOctave_fallback()
@@ -181,25 +182,22 @@ static void test_harmonicWeights_justMajor()
     float weights[7];
     sq.computeNoteWeights(weights, 7, ScaleQuantizer::kWeightHarmonic);
 
+    // Consonant degrees get charWeight (3.0), non-consonant get 1.0
     // Degree 0 = 1/1 (p*q=1, consonant)
-    ASSERT_NEAR(weights[0], 1.0f, 0.01f, "Harmonic JI: degree 0 (1/1) consonant");
+    ASSERT_NEAR(weights[0], 3.0f, 0.01f, "Harmonic JI: degree 0 (1/1) consonant");
     // Degree 1 = 9/8 (p*q=72, NOT consonant — too complex)
-    ASSERT_NEAR(weights[1], 3.0f, 0.01f, "Harmonic JI: degree 1 (9/8) characteristic");
+    ASSERT_NEAR(weights[1], 1.0f, 0.01f, "Harmonic JI: degree 1 (9/8) non-consonant");
     // Degree 2 = 5/4 (p*q=20, NOT consonant by p*q<=18 rule)
-    // Actually 5*4=20 > 18, so this should be characteristic
-    ASSERT_NEAR(weights[2], 3.0f, 0.01f, "Harmonic JI: degree 2 (5/4) characteristic");
+    ASSERT_NEAR(weights[2], 1.0f, 0.01f, "Harmonic JI: degree 2 (5/4) non-consonant");
     // Degree 3 = 4/3 (p*q=12, consonant)
-    ASSERT_NEAR(weights[3], 1.0f, 0.01f, "Harmonic JI: degree 3 (4/3) consonant");
+    ASSERT_NEAR(weights[3], 3.0f, 0.01f, "Harmonic JI: degree 3 (4/3) consonant");
     // Degree 4 = 3/2 (p*q=6, consonant)
-    ASSERT_NEAR(weights[4], 1.0f, 0.01f, "Harmonic JI: degree 4 (3/2) consonant");
+    ASSERT_NEAR(weights[4], 3.0f, 0.01f, "Harmonic JI: degree 4 (3/2) consonant");
     // Degree 5 = 5/3 (p*q=15, consonant)
-    ASSERT_NEAR(weights[5], 1.0f, 0.01f, "Harmonic JI: degree 5 (5/3) consonant");
+    ASSERT_NEAR(weights[5], 3.0f, 0.01f, "Harmonic JI: degree 5 (5/3) consonant");
     // Degree 6 = 15/8 (p*q=120, NOT consonant)
-    // But wait — nearest simple fraction to 15/8 = 1.875...
-    // 2/1 = 2.0 -> 111 cents away. 11/6 = 1.833 -> 39 cents.
-    // Actually 15/8 itself is in the search: p=15 > 12, so not searched.
-    // Nearest in [1,12]: 11/6=1.833 (38.9c), not within 20c. So characteristic.
-    ASSERT_NEAR(weights[6], 3.0f, 0.01f, "Harmonic JI: degree 6 (15/8) characteristic");
+    // Nearest in [1,12]: 11/6=1.833 (38.9c), not within 20c. So non-consonant.
+    ASSERT_NEAR(weights[6], 1.0f, 0.01f, "Harmonic JI: degree 6 (15/8) non-consonant");
 }
 
 static void test_harmonicWeights_12TET()
@@ -213,12 +211,13 @@ static void test_harmonicWeights_12TET()
     float weights[12];
     sq.computeNoteWeights(weights, 12, ScaleQuantizer::kWeightHarmonic);
 
+    // Consonant degrees get charWeight (3.0), non-consonant get 1.0
     // Degree 0 = 0 cents = 1/1 (p*q=1) consonant
-    ASSERT_NEAR(weights[0], 1.0f, 0.01f, "Harmonic 12TET: degree 0 (unison)");
+    ASSERT_NEAR(weights[0], 3.0f, 0.01f, "Harmonic 12TET: degree 0 (unison)");
     // Degree 5 = 500 cents ≈ 4/3 (498c, 2c off, p*q=12) consonant
-    ASSERT_NEAR(weights[5], 1.0f, 0.01f, "Harmonic 12TET: degree 5 (fourth)");
+    ASSERT_NEAR(weights[5], 3.0f, 0.01f, "Harmonic 12TET: degree 5 (fourth)");
     // Degree 7 = 700 cents ≈ 3/2 (702c, 2c off, p*q=6) consonant
-    ASSERT_NEAR(weights[7], 1.0f, 0.01f, "Harmonic 12TET: degree 7 (fifth)");
+    ASSERT_NEAR(weights[7], 3.0f, 0.01f, "Harmonic 12TET: degree 7 (fifth)");
 
     // All weights should be valid (no NaN, no negative)
     for (int i = 0; i < 12; ++i) {
@@ -312,10 +311,10 @@ static void test_warpDegree_equal_identity()
 static void test_warpDegree_major_75()
 {
     // 12-TET Major, warpAmount=75: charWeight = 1+0.75*4 = 4.0
-    // Major degrees (0,2,4,5,7,9,11) weight 1, characteristic (1,3,6,8,10) weight 4
-    // Total weight = 7*1 + 5*4 = 27
-    // Expected: characteristic notes should never shift (they sit in large zones)
-    // Some major notes should shift toward characteristic neighbors
+    // Major degrees (0,2,4,5,7,9,11) weight 4, non-major (1,3,6,8,10) weight 1
+    // Total weight = 7*4 + 5*1 = 33
+    // Expected: major notes should never shift (they sit in large zones)
+    // Some non-major notes should shift toward major neighbors
     ScaleQuantizer sq;
     _NT_sclNote notes[12];
     make12TET(notes);
@@ -325,14 +324,16 @@ static void test_warpDegree_major_75()
     for (int d = 0; d < 12; ++d)
         results[d] = sq.warpDegree(d, ScaleQuantizer::kWeightMajor, 75);
 
-    // Characteristic notes should stay (their zones are large)
-    ASSERT_EQ(results[1], 1, "warp75: C# stays");
-    ASSERT_EQ(results[3], 3, "warp75: Eb stays");
-    ASSERT_EQ(results[6], 6, "warp75: F# stays");
-    ASSERT_EQ(results[8], 8, "warp75: Ab stays");
-    ASSERT_EQ(results[10], 10, "warp75: Bb stays");
+    // Major notes should stay (their zones are large)
+    ASSERT_EQ(results[0], 0, "warp75: C stays");
+    ASSERT_EQ(results[2], 2, "warp75: D stays");
+    ASSERT_EQ(results[4], 4, "warp75: E stays");
+    ASSERT_EQ(results[5], 5, "warp75: F stays");
+    ASSERT_EQ(results[7], 7, "warp75: G stays");
+    ASSERT_EQ(results[9], 9, "warp75: A stays");
+    ASSERT_EQ(results[11], 11, "warp75: B stays");
 
-    // At least some major notes should shift
+    // At least some non-major notes should shift toward major neighbors
     int shifts = 0;
     for (int d = 0; d < 12; ++d) {
         if (results[d] != d) shifts++;
@@ -459,11 +460,11 @@ static void test_computeNoteWeights_custom_charWeight()
     float weights[12];
     sq.computeNoteWeights(weights, 12, ScaleQuantizer::kWeightMajor, 5.0f);
 
-    // Major degrees should be 1.0, non-major should be 5.0
-    ASSERT_NEAR(weights[0], 1.0f, 0.01f, "custom charWeight: C = 1");
-    ASSERT_NEAR(weights[1], 5.0f, 0.01f, "custom charWeight: C# = 5");
-    ASSERT_NEAR(weights[7], 1.0f, 0.01f, "custom charWeight: G = 1");
-    ASSERT_NEAR(weights[6], 5.0f, 0.01f, "custom charWeight: F# = 5");
+    // Major degrees should be 5.0 (charWeight), non-major should be 1.0
+    ASSERT_NEAR(weights[0], 5.0f, 0.01f, "custom charWeight: C = 5");
+    ASSERT_NEAR(weights[1], 1.0f, 0.01f, "custom charWeight: C# = 1");
+    ASSERT_NEAR(weights[7], 5.0f, 0.01f, "custom charWeight: G = 5");
+    ASSERT_NEAR(weights[6], 1.0f, 0.01f, "custom charWeight: F# = 1");
 }
 
 int main()
