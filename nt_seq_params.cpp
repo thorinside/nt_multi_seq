@@ -126,12 +126,6 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
     }
     alg->switchingEngine = false;
 
-    // Update engine page size; notify host only after init is complete
-    int enginePageIndex = alg->channels[ch].enginePageIndex;
-    alg->pageDefs[enginePageIndex].numParams = (uint8_t)numEngineDefs;
-    if (alg->initDone)
-        NT_updateParameterPages(algIdx);
-
     // Update engine page name: "Ch N <Engine>" or "Ch N" for None
     {
         char* buf = alg->pageNameBufs[ch * 2 + 1];
@@ -143,6 +137,11 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
         }
         buf[len] = 0;
     }
+
+    // Update engine page size; actual host notification deferred to step()
+    int enginePageIndex = alg->channels[ch].enginePageIndex;
+    alg->pageDefs[enginePageIndex].numParams = (uint8_t)numEngineDefs;
+    alg->pagesDirty = true;
 
     // Reset channel CV cache
     alg->channels[ch].cachedPitch = 0.0f;

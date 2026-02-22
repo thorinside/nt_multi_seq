@@ -121,6 +121,7 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     alg->focusChannel = -1;
     alg->initDone = false;
     alg->switchingEngine = false;
+    alg->pagesDirty = false;
 
     // --- Build parameter definitions ---
     int p = 0;
