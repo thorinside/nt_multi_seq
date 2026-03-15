@@ -52,6 +52,44 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
     if (alg->scaleDirty && !alg->sclRequest.error && alg->sclRequest.numNotes > 0) {
         alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
         alg->scaleDirty = false;
+        alg->warpDirty = true;
+    }
+
+    // --- Rebuild warp LUT if needed (once per parameter change, outside audio loop) ---
+    if (alg->warpDirty) {
+        alg->warpDirty = false;
+        int warpAmount = alg->v[kParamWarpAmount];
+        int nd = (int)alg->scaleQuantizer.numNotes();
+        if (warpAmount > 0 && nd > 0 && alg->scaleQuantizer.isLoaded()) {
+            int weightMode = alg->v[kParamNoteWeight];
+            float charWeight = 1.0f + (float)warpAmount / 100.0f * 4.0f;
+            float weights[128];
+            alg->scaleQuantizer.computeNoteWeights(weights, nd,
+                (ScaleQuantizer::WeightMode)weightMode, charWeight);
+
+            // Build cumulative weight table
+            float cumulative[128];
+            cumulative[0] = weights[0];
+            for (int i = 1; i < nd; ++i)
+                cumulative[i] = cumulative[i - 1] + weights[i];
+            float totalWeight = cumulative[nd - 1];
+
+            // Populate LUT for each degree
+            for (int d = 0; d < nd; ++d) {
+                float pos = ((float)d + 0.5f) / (float)nd * totalWeight;
+                int warped = nd - 1;
+                for (int i = 0; i < nd; ++i) {
+                    if (pos <= cumulative[i]) {
+                        warped = i;
+                        break;
+                    }
+                }
+                alg->warpLut[d] = (int8_t)warped;
+            }
+            alg->cachedWarpNumNotes = nd;
+        } else {
+            alg->cachedWarpNumNotes = 0;
+        }
     }
 
     // --- Get global params ---
@@ -160,13 +198,11 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                     ? &alg->scaleQuantizer : nullptr;
                 EngineOutput eo = alg->channels[ch].engine->clockTick(scalePtr);
 
-                // Warped weighting post-process
-                int warpAmount = alg->v[kParamWarpAmount];
-                if (warpAmount > 0 && scalePtr) {
+                // Warped weighting post-process (uses precomputed LUT)
+                if (alg->cachedWarpNumNotes > 0 && scalePtr) {
                     int degOctave;
                     int degree = scalePtr->findNearestDegree(eo.pitch, degOctave);
-                    int weightMode = alg->v[kParamNoteWeight];
-                    int warped = scalePtr->warpDegree(degree, (ScaleQuantizer::WeightMode)weightMode, warpAmount);
+                    int warped = alg->warpLut[degree];
                     if (warped != degree) {
                         eo.pitch = scalePtr->quantize(warped, degOctave, 0);
                         eo.midiNote = scalePtr->scaleDegreeToMidi(warped, degOctave + 5, 0);

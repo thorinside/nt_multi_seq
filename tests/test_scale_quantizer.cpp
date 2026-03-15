@@ -449,6 +449,83 @@ static void test_warpDegree_BP()
     }
 }
 
+static void test_warpLut_matches_warpDegree()
+{
+    // Validate that the LUT-building algorithm (used in step()) matches
+    // warpDegree() output for all degrees, modes, and warp amounts
+    struct ScaleSetup {
+        const char* name;
+        void (*build)(_NT_sclNote*);
+        int numNotes;
+    };
+    ScaleSetup scales[] = {
+        { "12TET", make12TET, 12 },
+        { "JustMajor", makeJustMajor, 7 },
+        { "BP", makeBohlenPierce, 13 },
+    };
+
+    ScaleQuantizer::WeightMode modes[] = {
+        ScaleQuantizer::kWeightMajor,
+        ScaleQuantizer::kWeightHarmonic,
+        ScaleQuantizer::kWeightEqual,
+    };
+    const char* modeNames[] = { "Major", "Harmonic", "Equal" };
+    int warpAmounts[] = { 0, 25, 50, 75, 100 };
+
+    for (int si = 0; si < 3; ++si) {
+        ScaleQuantizer sq;
+        _NT_sclNote buf[13];
+        scales[si].build(buf);
+        int nd = scales[si].numNotes;
+        sq.loadScale(buf, nd);
+
+        for (int mi = 0; mi < 3; ++mi) {
+            for (int wi = 0; wi < 5; ++wi) {
+                int warpAmount = warpAmounts[wi];
+                ScaleQuantizer::WeightMode mode = modes[mi];
+
+                // Build LUT the same way step() does
+                int8_t lut[128];
+                if (warpAmount > 0 && nd > 0) {
+                    float charWeight = 1.0f + (float)warpAmount / 100.0f * 4.0f;
+                    float weights[128];
+                    sq.computeNoteWeights(weights, nd, mode, charWeight);
+                    float cumulative[128];
+                    cumulative[0] = weights[0];
+                    for (int i = 1; i < nd; ++i)
+                        cumulative[i] = cumulative[i - 1] + weights[i];
+                    float totalWeight = cumulative[nd - 1];
+                    for (int d = 0; d < nd; ++d) {
+                        float pos = ((float)d + 0.5f) / (float)nd * totalWeight;
+                        int warped = nd - 1;
+                        for (int i = 0; i < nd; ++i) {
+                            if (pos <= cumulative[i]) {
+                                warped = i;
+                                break;
+                            }
+                        }
+                        lut[d] = (int8_t)warped;
+                    }
+                } else {
+                    for (int d = 0; d < nd; ++d)
+                        lut[d] = (int8_t)d;
+                }
+
+                // Compare against warpDegree() for every degree
+                for (int d = 0; d < nd; ++d) {
+                    int expected = sq.warpDegree(d, mode, warpAmount);
+                    tests++;
+                    if (lut[d] != expected) {
+                        fprintf(stderr, "FAIL: LUT mismatch %s %s warp=%d deg=%d: LUT=%d warpDegree=%d\n",
+                            scales[si].name, modeNames[mi], warpAmount, d, (int)lut[d], expected);
+                        failures++;
+                    }
+                }
+            }
+        }
+    }
+}
+
 static void test_computeNoteWeights_custom_charWeight()
 {
     // Verify the overload with custom charWeight works
@@ -491,6 +568,7 @@ int main()
     test_findNearestDegree_negative();
     test_findNearestDegree_justMajor();
     test_warpDegree_BP();
+    test_warpLut_matches_warpDegree();
     test_computeNoteWeights_custom_charWeight();
 
     printf("%d tests, %d failures\n", tests, failures);

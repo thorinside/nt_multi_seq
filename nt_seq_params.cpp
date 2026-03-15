@@ -163,13 +163,20 @@ void parameterChanged(_NT_algorithm* self, int p)
 
     int algIdx = NT_algorithmIndex(static_cast<const _NT_algorithm*>(self));
 
-    // Note weight mode changed — propagate to all engines
+    // Note weight mode changed — propagate to all engines + invalidate warp cache
     if (p == kParamNoteWeight) {
         int mode = alg->v[kParamNoteWeight];
         for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
             if (alg->channels[ch].engine)
                 alg->channels[ch].engine->setWeightMode(mode);
         }
+        alg->warpDirty = true;
+        return;
+    }
+
+    // Warp amount changed — invalidate warp cache
+    if (p == kParamWarpAmount) {
+        alg->warpDirty = true;
         return;
     }
 

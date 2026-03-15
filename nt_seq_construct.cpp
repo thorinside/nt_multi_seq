@@ -122,6 +122,8 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     alg->initDone = false;
     alg->switchingEngine = false;
     alg->pagesDirty = false;
+    alg->warpDirty = false;
+    alg->cachedWarpNumNotes = 0;
 
     // --- Build parameter definitions ---
     int p = 0;

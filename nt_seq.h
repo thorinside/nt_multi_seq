@@ -204,6 +204,11 @@ struct NtSeq : public _NT_algorithm {
     bool awaitingCallback;
     bool scaleDirty;
 
+    // Warp LUT cache (precomputed degree-to-warped-degree mapping)
+    bool warpDirty;
+    int8_t warpLut[128];       // warpLut[degree] = warped degree
+    int cachedWarpNumNotes;     // 0 = no valid cache (warp inactive or no scale)
+
     // UI state
     int8_t focusChannel;  // -1 = overview, 0-7 = focused channel
     bool initDone;        // Set true after first step(); guards param sync during init
