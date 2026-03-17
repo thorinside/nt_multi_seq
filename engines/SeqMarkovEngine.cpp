@@ -309,13 +309,7 @@ void SeqMarkovEngine::mutateSequence(int numDegrees)
         if (vMin > vMax - 10) vMin = vMax - 10;
         uint8_t vel = (uint8_t)(vMin + (int)(rng() % (uint32_t)(vMax - vMin + 1)));
 
-        bool active = sequence_[i].active;
-        if (active && appliedDensity_ < 100) {
-            if ((int)(rng() % 100u) >= appliedDensity_)
-                active = false;
-        }
-
-        candidate[i] = { (int8_t)deg, octShift, vel, active };
+        candidate[i] = { (int8_t)deg, octShift, vel, sequence_[i].active };
     }
 
     float mutF = (float)mutation_ / 100.0f;

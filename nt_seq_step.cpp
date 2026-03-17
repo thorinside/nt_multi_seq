@@ -45,14 +45,19 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
                     NT_updateParameterDefinition(algIdx, kParamScaleFile);
             }
             parameterChanged(self, kParamScaleFile);
+        } else {
+            // Card unmounted: allow fresh scale load on remount
+            alg->awaitingCallback = false;
         }
     }
 
     // --- Check if scale was loaded (callback completed) ---
-    if (alg->scaleDirty && !alg->sclRequest.error && alg->sclRequest.numNotes > 0) {
-        alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
+    if (alg->scaleDirty) {
+        if (!alg->sclRequest.error && alg->sclRequest.numNotes > 0) {
+            alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
+            alg->warpDirty = true;
+        }
         alg->scaleDirty = false;
-        alg->warpDirty = true;
     }
 
     // --- Rebuild warp LUT if needed (once per parameter change, outside audio loop) ---
