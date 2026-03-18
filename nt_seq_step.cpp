@@ -22,14 +22,6 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
     NtSeq* alg = static_cast<NtSeq*>(self);
     alg->initDone = true;
 
-    // Flush deferred page update (single call after all engine switches)
-    if (alg->pagesDirty) {
-        alg->pagesDirty = false;
-        int algIdx = NT_algorithmIndex(self);
-        if (algIdx >= 0)
-            NT_updateParameterPages(algIdx);
-    }
-
     int numFrames = numFramesBy4 * 4;
 
     // --- SD card mount detection ---

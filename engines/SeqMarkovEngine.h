@@ -15,8 +15,9 @@ public:
     int getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const override;
     const char* name() const override { return "Markov"; }
     bool usesTimedGate() const override { return true; }
-    int gateLengthPercent() const override { return 50; }
+    int gateLengthPercent() const override { return 99; }
     void getFocusDetail(FocusDetail& detail) const override;
+    void getFocusBarInfo(FocusBarInfo& info) const override;
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;

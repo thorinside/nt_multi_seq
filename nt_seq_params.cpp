@@ -138,10 +138,10 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
         buf[len] = 0;
     }
 
-    // Update engine page size; actual host notification deferred to step()
+    // Update engine page size and notify host immediately.
     int enginePageIndex = alg->channels[ch].enginePageIndex;
     alg->pageDefs[enginePageIndex].numParams = (uint8_t)numEngineDefs;
-    alg->pagesDirty = true;
+    NT_updateParameterPages((uint32_t)algIdx);
 
     // Reset channel CV cache
     alg->channels[ch].cachedPitch = 0.0f;

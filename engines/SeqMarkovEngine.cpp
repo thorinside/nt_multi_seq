@@ -590,6 +590,22 @@ void SeqMarkovEngine::getFocusDetail(FocusDetail& detail) const
     line2.appendChar('%', 6);
 }
 
+void SeqMarkovEngine::getFocusBarInfo(FocusBarInfo& info) const
+{
+    info.numBars = 1;
+    FocusBar& bar = info.bars[0];
+    bar.length = length_;
+    bar.playhead = currentStep_;
+    for (int i = 0; i < length_ && i < kMaxBarSteps; ++i) {
+        if (!sequence_[i].active)
+            bar.levels[i] = 1;  // black for rests
+        else
+            bar.levels[i] = (uint8_t)((sequence_[i].scaleDegree % 15) + 1);
+    }
+    if (currentStep_ >= 0 && currentStep_ < kMaxBarSteps)
+        bar.levels[currentStep_] = 15;  // bright playhead
+}
+
 int SeqMarkovEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
 {
     for (int i = 0; i < kNumMarkovParams; ++i)

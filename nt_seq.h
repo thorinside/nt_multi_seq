@@ -212,7 +212,6 @@ struct NtSeq : public _NT_algorithm {
     // UI state
     int8_t focusChannel;  // -1 = overview, 0-7 = focused channel
     bool initDone;        // Set true after first step(); guards param sync during init
-    bool pagesDirty;      // Set true when engine page sizes change; flushed in step()
 
     // Re-entrancy guard for engine switching (prevents recursive switches during value resets)
     bool switchingEngine;

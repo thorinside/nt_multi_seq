@@ -364,6 +364,8 @@ uint32_t hasCustomUi(_NT_algorithm* self)
         controls |= kNT_encoderL | kNT_encoderR;
         controls |= kNT_potL | kNT_potC | kNT_potR;
     } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineSeqMarkov) {
+        controls |= kNT_encoderL | kNT_encoderR;
+        controls |= kNT_potL | kNT_potC | kNT_potR;
         controls |= kNT_potButtonL | kNT_potButtonR;
     }
     return controls;
@@ -485,8 +487,53 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
     // Markov focus controls
     if (alg->channels[focus].engineType == kEngineSeqMarkov && alg->channels[focus].engine) {
         SeqMarkovEngine* mk = static_cast<SeqMarkovEngine*>(alg->channels[focus].engine);
+        int engBase = alg->channels[focus].engineParamBase;
+
+        // Encoder L: Style (wrapping 0-7)
+        if (data.encoders[0] != 0) {
+            int v = alg->v[engBase + SeqMarkovEngine::kMarkovStyle] + data.encoders[0];
+            while (v < 0) v += SeqMarkovEngine::kNumStyles;
+            while (v >= SeqMarkovEngine::kNumStyles) v -= SeqMarkovEngine::kNumStyles;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SeqMarkovEngine::kMarkovStyle) + paramOffset, (int16_t)v);
+        }
+
+        // Encoder R: Length (1-64)
+        if (data.encoders[1] != 0) {
+            int v = alg->v[engBase + SeqMarkovEngine::kMarkovLength] + data.encoders[1];
+            if (v < 1) v = 1;
+            if (v > 64) v = 64;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SeqMarkovEngine::kMarkovLength) + paramOffset, (int16_t)v);
+        }
+
+        // Pot L: Emotion (0-100)
+        if (data.controls & kNT_potL) {
+            int v = (int)(data.pots[0] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SeqMarkovEngine::kMarkovEmotion) + paramOffset, (int16_t)v);
+        }
+
+        // Pot C: Jumpiness (0-100)
+        if (data.controls & kNT_potC) {
+            int v = (int)(data.pots[1] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SeqMarkovEngine::kMarkovJumpiness) + paramOffset, (int16_t)v);
+        }
+
+        // Pot R: Mutation (0-100)
+        if (data.controls & kNT_potR) {
+            int v = (int)(data.pots[2] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SeqMarkovEngine::kMarkovMutation) + paramOffset, (int16_t)v);
+        }
+
+        // Pot Button L: Randomize
         if ((data.controls & kNT_potButtonL) && !(data.lastButtons & kNT_potButtonL))
             mk->uiForceRandomize();
+
+        // Pot Button R: Regenerate
         if ((data.controls & kNT_potButtonR) && !(data.lastButtons & kNT_potButtonR))
             mk->uiForceRegenerate();
         return;
