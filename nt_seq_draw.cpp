@@ -486,7 +486,7 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
     if (alg->channels[focus].engineType == kEngineSeqMarkov && alg->channels[focus].engine) {
         SeqMarkovEngine* mk = static_cast<SeqMarkovEngine*>(alg->channels[focus].engine);
         if ((data.controls & kNT_potButtonL) && !(data.lastButtons & kNT_potButtonL))
-            mk->uiForceMutate();
+            mk->uiForceRandomize();
         if ((data.controls & kNT_potButtonR) && !(data.lastButtons & kNT_potButtonR))
             mk->uiForceRegenerate();
         return;

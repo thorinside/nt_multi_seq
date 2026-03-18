@@ -14,11 +14,13 @@ public:
     int getParameterDefs(_NT_parameter* defs) const override;
     int getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const override;
     const char* name() const override { return "Markov"; }
+    bool usesTimedGate() const override { return true; }
+    int gateLengthPercent() const override { return 50; }
     void getFocusDetail(FocusDetail& detail) const override;
     int currentStep() const override;
     int sequenceLength() const override;
     int getStatusText(char* buf, int maxLen) const override;
-    void uiForceMutate();
+    void uiForceRandomize();
     void uiForceRegenerate();
 
     enum Param {
@@ -28,41 +30,32 @@ public:
         kMarkovRange,
         kMarkovMutation,
         kMarkovLength,
-        kMarkovDensity,
-        kMarkovVelocity,
-        kMarkovMutateSwitch,
+        kMarkovRandomizeSwitch,
         kMarkovRegenerateSwitch,
         kNumMarkovParams
     };
 
     enum Style {
-        kStyleTonal = 0,
-        kStyleStepwise,
-        kStyleVamp,
-        kStyleLeaping,
-        kStyleMelodic,
-        kStyleDriving,
-        kStyleHypnotic,
-        kStyleChaotic,
+        kStylePopRock = 0,
+        kStyleClassical,
+        kStyleJazz,
+        kStyleTechno,
+        kStyleMinimalTechno,
+        kStyleMelodicTechno,
+        kStyleLmdAllGenres,
+        kStyleLmdElectronic,
         kNumStyles
     };
 
 private:
     static constexpr int kMaxSteps = 64;
     static constexpr int kMaxDegrees = 128;
+    static constexpr int kMatrixDeg = 7;
     static constexpr int kRhythmPatternLen = 16;
     static constexpr int kNumRhythmPatterns = 8;
 
-    // Style definitions: behavioral parameters that generate NxN matrices
-    // for any number of scale degrees
-    struct StyleDef {
-        float selfBoost;      // How sticky the current degree is (0-20)
-        float stepBias;       // Positive=stepwise, negative=leaping (-1 to 1)
-        float homeGravity;    // Pull toward degree 0 / tonic (0-1)
-        float fifthGravity;   // Pull toward approximate dominant (0-1)
-    };
-
-    static const StyleDef kStyleDefs[kNumStyles];
+    // One 7x7 transition matrix per style, mapped to any scale via degreeMap_.
+    static const float kStyleMatrices[kNumStyles][kMatrixDeg][kMatrixDeg];
     static const uint8_t kRhythmPatterns[kNumRhythmPatterns][kRhythmPatternLen];
 
     // Parameters
@@ -72,16 +65,8 @@ private:
     int range_;       // 1-3
     int mutation_;    // 0-100
     int length_;      // 1-64
-    int density_;     // 1-100
-    int velocity_;    // 0-100
-    int mutateSwitch_;     // 0/1
+    int randomizeSwitch_;  // 0/1
     int regenerateSwitch_; // 0/1
-    // Slowly-converging "applied" values used by generator.
-    int appliedStyle_;
-    int appliedEmotion_;
-    int appliedJumpiness_;
-    int appliedRange_;
-    int appliedDensity_;
 
     // Sequence state
     struct Step {
@@ -98,17 +83,20 @@ private:
     bool needsRegenerate_;
     bool rhythmInitialized_;
     bool regeneratePending_;
+    bool randomizePending_;
+
+    // Degree mapping: maps each real scale degree to a base matrix degree (0-6).
+    int degreeMap_[kMaxDegrees];
 
     // PRNG
     uint32_t rngState_;
     uint32_t rng();
     float rngFloat();
 
-    float computeWeight(int fromDeg, int toDeg, int numDegrees) const;
+    void buildDegreeMap(const ScaleQuantizer* scale);
     float applyEmotion(float weight, int fromDeg, int toDeg) const;
     int pickNextDegree(int currentDeg, int numDegrees);
     void initializeRhythm();
-    bool driftTowardTargets();
     void ensureAtLeastOneActive(int length);
     void generateSequence(int numDegrees);
     void mutateSequence(int numDegrees);
