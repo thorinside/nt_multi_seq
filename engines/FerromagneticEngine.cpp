@@ -276,6 +276,11 @@ void FerromagneticEngine::handleLoopWrap()
                 refreshLayerIdx_ = (refreshLayerIdx_ + 1) % maxLayers_;
             }
             break;
+        case kCompletionNewInversion:
+            // User switched to NewInversion while already complete
+            inversionOffset_ = (inversionOffset_ + 1) % numDegrees_;
+            resetLoop();
+            break;
         }
     }
 }
@@ -285,7 +290,8 @@ EngineOutput FerromagneticEngine::clockTick(const ScaleQuantizer* scale)
     EngineOutput out = { 0.0f, 0.0f, 0.0f, 60 };
 
     // Reinitialize when scale first becomes available or note count changes
-    if (scale && scale->isLoaded()) {
+    // Only the Melody role uses the scale for note generation.
+    if (role_ == kRoleMelody && scale && scale->isLoaded()) {
         if (!scaleLoaded_ || (int)scale->numNotes() != numDegrees_) {
             computeProbabilities(scale);
             scaleLoaded_ = true;
@@ -383,8 +389,11 @@ void FerromagneticEngine::parameterChanged(int localIndex, int16_t value)
         {
             int newMax = clampInt(value, 1, kMaxLayers);
             maxLayers_ = newMax;
-            if (currentLayer_ >= maxLayers_)
+            if (currentLayer_ >= maxLayers_) {
                 resetLoop();
+            } else if (refreshLayerIdx_ >= maxLayers_) {
+                refreshLayerIdx_ = 0;
+            }
         }
         break;
     case kFerroHarmonyMode:

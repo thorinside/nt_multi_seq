@@ -644,6 +644,261 @@ static void test_focus_bar_max_layers_1()
     }
 }
 
+static void test_refresh_layer_idx_clamp_on_maxlayers_reduce()
+{
+    // Bug: reducing maxLayers while allLayersComplete_=true and Refresh completion
+    // left refreshLayerIdx_ pointing beyond the new maxLayers_.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionRefresh);
+    engine.parameterChanged(FerromagneticEngine::kFerroRefreshRate, 1);
+    engine.init(48000);
+
+    // Build 4 layers (4 layers x 2 steps = 8 ticks)
+    for (int i = 0; i < 8; i++)
+        engine.clockTick(nullptr);
+
+    // allLayersComplete_=true. Advance refreshLayerIdx_ to 3 by cycling through
+    // several refresh wraps. Each wrap with silentLoops_ >= 1 advances refreshLayerIdx_.
+    // After 1st wrap: refreshLayerIdx_ = 1
+    // After 2nd wrap: refreshLayerIdx_ = 2
+    // After 3rd wrap: refreshLayerIdx_ = 3
+    for (int i = 0; i < 6; i++)
+        engine.clockTick(nullptr);  // 3 wraps x 2 steps
+
+    // Now reduce maxLayers to 2. refreshLayerIdx_ was 3, which is out of bounds.
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 2);
+
+    // The engine should NOT crash or read stale layer data.
+    // refreshLayerIdx_ should be clamped to valid range [0, maxLayers_-1].
+    bool gotGate = false;
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        if (out.gate > 0.0f) gotGate = true;
+    }
+    ASSERT_TRUE(gotGate, "refresh layer idx clamp: produces notes after maxLayers reduce");
+}
+
+static void test_switch_to_new_inversion_while_complete()
+{
+    // Bug: switching to NewInversion while allLayersComplete_=true caused the
+    // engine to get stuck forever (missing case in handleLoopWrap else branch).
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionHold);
+    engine.init(48000);
+
+    // Build layer 0 (4 ticks), now allLayersComplete_=true
+    for (int i = 0; i < 4; i++)
+        engine.clockTick(nullptr);
+
+    // Verify we're in Hold silence
+    EngineOutput out = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out.gate, 0.0f, "new-inv switch: Hold silence");
+
+    // Switch to NewInversion while complete
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionNewInversion);
+
+    // Run through enough ticks that handleLoopWrap fires on a wrap boundary.
+    // The engine should resetLoop and start generating notes again.
+    int gateCount = 0;
+    for (int i = 0; i < 12; i++) {
+        out = engine.clockTick(nullptr);
+        if (out.gate > 0.0f) gateCount++;
+    }
+    ASSERT_TRUE(gateCount > 0, "new-inv switch: engine unstuck, generating notes");
+}
+
+// --- 13. Edge case boundary tests ---
+
+static void test_max_steps_128_boundary()
+{
+    // loopSteps=128 means step indices 0-127. step>>5 gives 0-3 for the
+    // 4-element layerGates_ bitmask. step=127: 127>>5 = 3, 127&31 = 31.
+    // Verify no out-of-bounds access.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 128);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.init(48000);
+
+    // Run through full 128-step loop
+    int gateCount = 0;
+    for (int i = 0; i < 128; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        if (out.gate > 0.0f) gateCount++;
+    }
+    // With density=100, all 128 steps should have gates
+    ASSERT_EQ(gateCount, 128, "128 steps: all gated with density=100");
+}
+
+static void test_status_text_maxlen_1()
+{
+    // maxLen=1: should write only the null terminator
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroRole, FerromagneticEngine::kRoleMelody);
+    engine.init(48000);
+
+    char buf[2] = {'X', 'X'};
+    int len = engine.getStatusText(buf, 1);
+    ASSERT_EQ(len, 0, "status text maxLen=1: returns 0");
+    ASSERT_EQ(buf[0], 0, "status text maxLen=1: null terminated");
+    // buf[1] should be untouched
+    ASSERT_EQ(buf[1], 'X', "status text maxLen=1: doesn't overwrite past buffer");
+}
+
+static void test_status_text_melody_maxlen_2()
+{
+    // maxLen=2: room for 'L' + null
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroRole, FerromagneticEngine::kRoleMelody);
+    engine.init(48000);
+
+    char buf[3] = {'X', 'X', 'X'};
+    int len = engine.getStatusText(buf, 2);
+    ASSERT_TRUE(len <= 1, "status melody maxLen=2: len <= 1");
+    ASSERT_TRUE(buf[len] == 0, "status melody maxLen=2: null terminated");
+    ASSERT_EQ(buf[2], 'X', "status melody maxLen=2: no overwrite past buffer");
+}
+
+static void test_refresh_single_layer()
+{
+    // Refresh with maxLayers=1: refreshLayerIdx_ = (0+1)%1 = 0, always layer 0
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionRefresh);
+    engine.parameterChanged(FerromagneticEngine::kFerroRefreshRate, 1);
+    engine.init(48000);
+
+    // Build 1 layer (4 ticks)
+    for (int i = 0; i < 4; i++)
+        engine.clockTick(nullptr);
+
+    // Now allLayersComplete_=true. Refresh should cycle through layer 0 only.
+    // Should output notes (density=100) without crashing.
+    int gateCount = 0;
+    for (int i = 0; i < 16; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        if (out.gate > 0.0f) gateCount++;
+    }
+    ASSERT_TRUE(gateCount > 0, "refresh single layer: produces notes");
+}
+
+static void test_rec_gate_decay_rebuild()
+{
+    // RecGate with DecayRebuild: gate drops to 0 after completion,
+    // then goes back to 5V after resetLoop.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroRole, FerromagneticEngine::kRoleRecGate);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionDecayRebuild);
+    engine.parameterChanged(FerromagneticEngine::kFerroRefreshRate, 1);
+    engine.init(48000);
+
+    // Build phase: 2 ticks (1 layer x 2 steps)
+    EngineOutput out = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out.gate, 5.0f, "rec decay: building gate=5V");
+    out = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out.gate, 5.0f, "rec decay: building tick 2 gate=5V");
+
+    // Silent loop 1: gate=0V (2 ticks)
+    out = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out.gate, 0.0f, "rec decay: silent gate=0V");
+    out = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out.gate, 0.0f, "rec decay: silent tick 2 gate=0V");
+
+    // After 1 silent loop (refreshRate=1), resetLoop fires. Next tick: building again.
+    out = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out.gate, 5.0f, "rec decay: rebuild gate=5V");
+}
+
+static void test_generative_all_degrees_used_rest_output()
+{
+    // With maxLayers=8 and numDegrees=7, layer 7 should get a rest
+    // because all 7 degrees are exhausted by layers 0-6.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 8);
+    engine.parameterChanged(FerromagneticEngine::kFerroHarmonyMode, FerromagneticEngine::kHarmonyGenerative);
+    engine.parameterChanged(FerromagneticEngine::kFerroOctSpread, 0);
+    engine.init(48000);
+
+    // Run through 7 layers (14 ticks) -- layers 0-6 use all degrees
+    for (int i = 0; i < 14; i++)
+        engine.clockTick(nullptr);
+
+    // Layer 7 (2 ticks): should output rests (gate=0) since all degrees used
+    int restCount = 0;
+    for (int i = 0; i < 2; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        if (out.gate == 0.0f) restCount++;
+    }
+    ASSERT_EQ(restCount, 2, "generative exhausted: layer 7 all rests");
+}
+
+static void test_maxlayers_increase_after_completion()
+{
+    // After completion, increasing maxLayers shouldn't crash in Refresh mode.
+    // Unbuilt layers have gates=0 (from resetLoop), so outputNote returns gate=0.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionRefresh);
+    engine.parameterChanged(FerromagneticEngine::kFerroRefreshRate, 1);
+    engine.init(48000);
+
+    // Build 2 layers (4 ticks)
+    for (int i = 0; i < 4; i++)
+        engine.clockTick(nullptr);
+
+    // Increase maxLayers to 6. Layers 2-5 were never built.
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 6);
+
+    // Refresh should cycle through layers 0-5 without crashing.
+    // Layers 2-5 have no gates, so those ticks output silence.
+    for (int i = 0; i < 24; i++)
+        engine.clockTick(nullptr);
+    ASSERT_TRUE(true, "maxLayers increase after completion: no crash");
+}
+
+static void test_loop_trigger_velocity()
+{
+    // LoopTrig velocity should always be 5.0V
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroRole, FerromagneticEngine::kRoleLoopTrig);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.init(48000);
+
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        ASSERT_FLOAT_EQ(out.velocity, 5.0f, "loop trig: velocity always 5V");
+    }
+}
+
+static void test_focus_bar_playhead_tracks_tick()
+{
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 8);
+    engine.init(48000);
+
+    // After 3 ticks, currentTick_ should be 3
+    for (int i = 0; i < 3; i++)
+        engine.clockTick(nullptr);
+
+    FocusBarInfo info;
+    engine.getFocusBarInfo(info);
+    ASSERT_EQ(info.bars[0].playhead, 3, "focus bar: playhead=3 after 3 ticks");
+}
+
 int main()
 {
     // 1. Lifecycle
@@ -700,6 +955,21 @@ int main()
     test_refresh_cycles_through_layers();
     test_single_layer_single_step();
     test_focus_bar_max_layers_1();
+
+    // 12. Completion mode switching
+    test_refresh_layer_idx_clamp_on_maxlayers_reduce();
+    test_switch_to_new_inversion_while_complete();
+
+    // 13. Edge case boundary tests
+    test_max_steps_128_boundary();
+    test_status_text_maxlen_1();
+    test_status_text_melody_maxlen_2();
+    test_refresh_single_layer();
+    test_rec_gate_decay_rebuild();
+    test_generative_all_degrees_used_rest_output();
+    test_maxlayers_increase_after_completion();
+    test_loop_trigger_velocity();
+    test_focus_bar_playhead_tracks_tick();
 
     printf("%d tests, %d failures\n", tests, failures);
     return failures ? 1 : 0;
