@@ -132,7 +132,8 @@ void FerromagneticEngine::generateLayerZeroNote(int tick, const ScaleQuantizer* 
     }
 
     computeProbabilities(scale);
-    int degree = weightedPick(numDegrees_) + inversionOffset_;
+    int offset = (numDegrees_ > 0) ? (inversionOffset_ % numDegrees_) : 0;
+    int degree = weightedPick(numDegrees_) + offset;
     if (degree > 254) degree = 254;
     layerNotes_[0][tick] = (uint8_t)degree;
     setGateBit(0, tick, true);
@@ -310,7 +311,6 @@ EngineOutput FerromagneticEngine::clockTick(const ScaleQuantizer* scale)
     // --- Record Gate role ---
     if (role_ == kRoleRecGate) {
         currentTick_ = (currentTick_ + 1) % loopSteps_;
-        if (currentTick_ == 0) handleLoopWrap();
 
         if (!allLayersComplete_) {
             out.gate = 5.0f;
@@ -330,6 +330,9 @@ EngineOutput FerromagneticEngine::clockTick(const ScaleQuantizer* scale)
                 break;
             }
         }
+
+        if (currentTick_ == 0) handleLoopWrap();
+
         return out;
     }
 
@@ -462,9 +465,9 @@ int FerromagneticEngine::getStatusText(char* buf, int maxLen) const
         while (*s && len < maxLen - 1) buf[len++] = *s++;
     } else {
         // "L2/4 Tri"
-        buf[len++] = 'L';
+        if (len < maxLen - 1) buf[len++] = 'L';
         len += fmtInt(buf + len, (int32_t)(currentLayer_ + 1));
-        buf[len++] = '/';
+        if (len < maxLen - 1) buf[len++] = '/';
         len += fmtInt(buf + len, (int32_t)maxLayers_);
         if (len < maxLen - 1) buf[len++] = ' ';
         if (harmonyMode_ == kHarmonyStructured) {

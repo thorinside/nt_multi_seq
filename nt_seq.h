@@ -100,7 +100,7 @@ static const _NT_specification specifications[] = {
 };
 
 // --- Enum string arrays ---
-// Engine type with None for the runtime param (0=None, 1=Thorp, 2=Soma, 3=AE Seq, 4=Markov)
+// Engine type with None for the runtime param (0=None, 1=Thorp, 2=Soma, 3=AE Seq, 4=Markov, 5=Ferro)
 static const char* const engineTypeWithNoneStrings[] = {
     "None", "Thorp", "Soma", "AE Seq", "Markov", "Ferro", nullptr
 };

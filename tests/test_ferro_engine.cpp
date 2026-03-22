@@ -433,6 +433,43 @@ static void test_timed_gate_looptrig()
     ASSERT_TRUE(!engine.usesTimedGate(), "loop trig: no timed gate");
 }
 
+// --- Inversion offset wrapping ---
+
+static void test_new_inversion_offset_wraps()
+{
+    // After many New Inversion cycles, the melody should still produce
+    // meaningful degrees (not pinned to 254 due to unbounded offset).
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionNewInversion);
+    engine.init(48000);
+
+    // Run through many full inversion cycles.
+    // Each cycle: 1 layer x 2 steps = 2 ticks, then handleLoopWrap increments
+    // inversionOffset_ and resets. After 50 cycles, inversionOffset_ = 50.
+    // With numDegrees_=7, degree would have been 50 + pick(0..6) = 50..56
+    // without the modulo fix, eventually clamping to 254.
+    for (int cycle = 0; cycle < 50; cycle++) {
+        for (int t = 0; t < 2; t++)
+            engine.clockTick(nullptr);
+    }
+
+    // The next cycle should still produce pitches with degrees < numDegrees*2
+    // (base 0..6 + wrapped offset 0..6 = at most 12, well below 254).
+    bool allReasonable = true;
+    for (int t = 0; t < 2; t++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        // Without scale, pitch = degree / 12.0. Degree should be < 14 (7+7).
+        // Pitch < 14/12 = 1.167
+        if (out.gate > 0.0f && out.pitch > 2.0f) {
+            allReasonable = false;
+        }
+    }
+    ASSERT_TRUE(allReasonable, "new inversion: degrees stay bounded after many cycles");
+}
+
 int main()
 {
     // 1. Lifecycle
@@ -477,6 +514,7 @@ int main()
     test_velocity();
     test_timed_gate_melody();
     test_timed_gate_looptrig();
+    test_new_inversion_offset_wraps();
 
     printf("%d tests, %d failures\n", tests, failures);
     return failures ? 1 : 0;
