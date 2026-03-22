@@ -38,7 +38,6 @@ FerromagneticEngine::FerromagneticEngine()
     , refreshRate_(4)
     , currentTick_(0)
     , currentLayer_(0)
-    , loopCount_(0)
     , allLayersComplete_(false)
     , silentLoops_(0)
     , refreshLayerIdx_(0)
@@ -81,7 +80,6 @@ void FerromagneticEngine::resetLoop()
 {
     currentTick_ = 0;
     currentLayer_ = 0;
-    loopCount_ = 0;
     allLayersComplete_ = false;
     silentLoops_ = 0;
     refreshLayerIdx_ = 0;
@@ -247,8 +245,6 @@ void FerromagneticEngine::outputNote(EngineOutput& out, int layer, int tick, con
 
 void FerromagneticEngine::handleLoopWrap()
 {
-    loopCount_++;
-
     if (!allLayersComplete_) {
         if (currentLayer_ + 1 >= maxLayers_) {
             // All layers built
@@ -279,10 +275,6 @@ void FerromagneticEngine::handleLoopWrap()
                 silentLoops_ = 0;
                 refreshLayerIdx_ = (refreshLayerIdx_ + 1) % maxLayers_;
             }
-            break;
-        case kCompletionNewInversion:
-            inversionOffset_++;
-            resetLoop();
             break;
         }
     }

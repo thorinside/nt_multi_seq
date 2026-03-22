@@ -82,7 +82,6 @@ private:
     // Sequence state
     int currentTick_;
     int currentLayer_;
-    int loopCount_;
     bool allLayersComplete_;
     int silentLoops_;
     int refreshLayerIdx_;
