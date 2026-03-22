@@ -93,6 +93,7 @@ void FerromagneticEngine::computeProbabilities(const ScaleQuantizer* scale)
 {
     numDegrees_ = scale && scale->isLoaded() ? (int)scale->numNotes() : 7;
     if (numDegrees_ <= 0) numDegrees_ = 7;
+    if (numDegrees_ > 128) numDegrees_ = 128;
 
     if (scale && scale->isLoaded()) {
         scale->computeNoteWeights(probabilities_, numDegrees_,
@@ -455,20 +456,22 @@ int FerromagneticEngine::sequenceLength() const { return loopSteps_; }
 
 int FerromagneticEngine::getStatusText(char* buf, int maxLen) const
 {
+    if (maxLen <= 0) return 0;
+
     int len = 0;
     if (role_ == kRoleLoopTrig) {
         const char* s = "Trig:";
         while (*s && len < maxLen - 1) buf[len++] = *s++;
-        len += fmtInt(buf + len, (int32_t)loopSteps_);
+        if (len < maxLen - 4) len += fmtInt(buf + len, (int32_t)loopSteps_);
     } else if (role_ == kRoleRecGate) {
         const char* s = "RecG";
         while (*s && len < maxLen - 1) buf[len++] = *s++;
     } else {
         // "L2/4 Tri"
         if (len < maxLen - 1) buf[len++] = 'L';
-        len += fmtInt(buf + len, (int32_t)(currentLayer_ + 1));
+        if (len < maxLen - 2) len += fmtInt(buf + len, (int32_t)(currentLayer_ + 1));
         if (len < maxLen - 1) buf[len++] = '/';
-        len += fmtInt(buf + len, (int32_t)maxLayers_);
+        if (len < maxLen - 2) len += fmtInt(buf + len, (int32_t)maxLayers_);
         if (len < maxLen - 1) buf[len++] = ' ';
         if (harmonyMode_ == kHarmonyStructured) {
             static const char* voicingAbbr[] = {"Tri", "7th", "St5", "Oct", "Uni"};

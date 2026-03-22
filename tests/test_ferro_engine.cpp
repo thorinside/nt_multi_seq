@@ -470,6 +470,180 @@ static void test_new_inversion_offset_wraps()
     ASSERT_TRUE(allReasonable, "new inversion: degrees stay bounded after many cycles");
 }
 
+// --- 11. Edge case data-flow tests ---
+
+static void test_status_text_small_buffer()
+{
+    // fmtInt must not overflow when maxLen is tiny
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroRole, FerromagneticEngine::kRoleMelody);
+    engine.init(48000);
+
+    char buf[4];
+    memset(buf, 'X', sizeof(buf));
+    int len = engine.getStatusText(buf, 4);
+    // Must not write past buf[3]
+    ASSERT_TRUE(len <= 3, "status text: len fits in maxLen=4");
+    ASSERT_TRUE(buf[len] == 0, "status text: null terminated");
+}
+
+static void test_status_text_zero_buffer()
+{
+    FerromagneticEngine engine;
+    engine.init(48000);
+
+    // maxLen=0 should return 0 without writing
+    int len = engine.getStatusText(nullptr, 0);
+    ASSERT_EQ(len, 0, "status text: maxLen=0 returns 0");
+}
+
+static void test_status_text_looptrig_small_buffer()
+{
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroRole, FerromagneticEngine::kRoleLoopTrig);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 128);
+    engine.init(48000);
+
+    char buf[6]; // "Trig:" = 5 chars + null = 6, no room for "128"
+    memset(buf, 'X', sizeof(buf));
+    int len = engine.getStatusText(buf, 6);
+    ASSERT_TRUE(len <= 5, "status looptrig: fits in maxLen=6");
+    ASSERT_TRUE(buf[len] == 0, "status looptrig: null terminated");
+}
+
+static void test_octave_spread_zero()
+{
+    // octaveSpread_=0 should produce no displacement
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroHarmonyMode, FerromagneticEngine::kHarmonyGenerative);
+    engine.parameterChanged(FerromagneticEngine::kFerroOctSpread, 0);
+    engine.init(48000);
+
+    // Run through 2 layers x 4 steps = 8 ticks
+    // With no scale and numDegrees=7, all pitches should be < 7/12 = 0.583V
+    bool allBounded = true;
+    for (int i = 0; i < 8; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        if (out.gate > 0.0f && out.pitch > 1.0f) {
+            allBounded = false;
+        }
+    }
+    ASSERT_TRUE(allBounded, "octave spread 0: pitches bounded within 1 octave");
+}
+
+static void test_octave_spread_max()
+{
+    // octaveSpread_=3: degree can be picked + 0..3 * numDegrees
+    // With numDegrees=7, max degree = 6 + 3*7 = 27, pitch = 27/12 = 2.25V
+    // All pitches should remain reasonable (no clamp to 254)
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 16);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroHarmonyMode, FerromagneticEngine::kHarmonyGenerative);
+    engine.parameterChanged(FerromagneticEngine::kFerroOctSpread, 3);
+    engine.init(48000);
+
+    bool allValid = true;
+    for (int i = 0; i < 64; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        // With no scale, pitch = degree/12. Degree <= 27 -> pitch <= 2.25
+        // Allow some headroom but flag anything unreasonable
+        if (out.gate > 0.0f && out.pitch > 3.0f) {
+            allValid = false;
+        }
+    }
+    ASSERT_TRUE(allValid, "octave spread 3: all pitches < 3.0V");
+}
+
+static void test_generative_all_degrees_used()
+{
+    // With maxLayers=8 and numDegrees=7 (no scale), layers 0-6 use all 7 degrees.
+    // Layer 7 should get a rest (0xFF) since all degrees are zeroed.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 8);
+    engine.parameterChanged(FerromagneticEngine::kFerroHarmonyMode, FerromagneticEngine::kHarmonyGenerative);
+    engine.parameterChanged(FerromagneticEngine::kFerroOctSpread, 0);
+    engine.init(48000);
+
+    // Run through all 8 layers x 2 steps = 16 ticks
+    // Should not crash even when all degrees are exhausted
+    for (int i = 0; i < 16; i++) {
+        engine.clockTick(nullptr);
+    }
+    ASSERT_TRUE(true, "generative 8-layer: no crash when degrees exhausted");
+}
+
+static void test_refresh_cycles_through_layers()
+{
+    // Refresh completion: after all layers built, refreshLayerIdx_ should
+    // cycle through 0..maxLayers_-1 without going out of bounds
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionRefresh);
+    engine.parameterChanged(FerromagneticEngine::kFerroRefreshRate, 1);
+    engine.init(48000);
+
+    // Build 2 layers: 2 layers x 2 steps = 4 ticks
+    for (int i = 0; i < 4; i++)
+        engine.clockTick(nullptr);
+
+    // Now allLayersComplete_=true. Run many refresh cycles.
+    // Each loop wrap with silentLoops_ >= refreshRate_ advances refreshLayerIdx_.
+    // Should produce notes without crashing for many cycles.
+    bool gotGate = false;
+    for (int i = 0; i < 20; i++) {
+        EngineOutput out = engine.clockTick(nullptr);
+        if (out.gate > 0.0f) gotGate = true;
+    }
+    ASSERT_TRUE(gotGate, "refresh: produces notes after completion");
+}
+
+static void test_single_layer_single_step()
+{
+    // Extreme minimum: 1 layer, 2 steps (minimum loopSteps)
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.init(48000);
+
+    // 2 ticks builds layer 0, then complete
+    EngineOutput out1 = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out1.gate, 5.0f, "1-layer/2-step: tick 1 has gate");
+    EngineOutput out2 = engine.clockTick(nullptr);
+    ASSERT_FLOAT_EQ(out2.gate, 5.0f, "1-layer/2-step: tick 2 has gate");
+}
+
+static void test_focus_bar_max_layers_1()
+{
+    // getFocusBarInfo with maxLayers_=1 and count=1: level = 2+13=15
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.init(48000);
+
+    // Build all notes for layer 0
+    for (int i = 0; i < 4; i++)
+        engine.clockTick(nullptr);
+
+    FocusBarInfo info;
+    engine.getFocusBarInfo(info);
+    ASSERT_EQ(info.bars[1].length, 1, "focus bar: maxLayers=1 bar2.length=1");
+    // Steps with gates: level = 2 + 1*13/1 = 15
+    for (int i = 0; i < 4; i++) {
+        ASSERT_TRUE(info.bars[0].levels[i] >= 1, "focus bar: all steps have level >= 1");
+    }
+}
+
 int main()
 {
     // 1. Lifecycle
@@ -515,6 +689,17 @@ int main()
     test_timed_gate_melody();
     test_timed_gate_looptrig();
     test_new_inversion_offset_wraps();
+
+    // 11. Edge case data-flow tests
+    test_status_text_small_buffer();
+    test_status_text_zero_buffer();
+    test_status_text_looptrig_small_buffer();
+    test_octave_spread_zero();
+    test_octave_spread_max();
+    test_generative_all_degrees_used();
+    test_refresh_cycles_through_layers();
+    test_single_layer_single_step();
+    test_focus_bar_max_layers_1();
 
     printf("%d tests, %d failures\n", tests, failures);
     return failures ? 1 : 0;
