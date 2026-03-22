@@ -899,6 +899,221 @@ static void test_focus_bar_playhead_tracks_tick()
     ASSERT_EQ(info.bars[0].playhead, 3, "focus bar: playhead=3 after 3 ticks");
 }
 
+// --- 14. Scale-loaded tests ---
+
+// Helper: create a cents-based _NT_sclNote
+static _NT_sclNote centNote(double cents)
+{
+    _NT_sclNote n;
+    n.octaves = cents / 1200.0;
+    return n;
+}
+
+// Build a 7-note major scale (cents-based)
+static void makeMajorScale(_NT_sclNote* notes)
+{
+    // Major scale intervals in cents: 200, 400, 500, 700, 900, 1100, 1200
+    static const double cents[] = { 200.0, 400.0, 500.0, 700.0, 900.0, 1100.0, 1200.0 };
+    for (int i = 0; i < 7; ++i)
+        notes[i] = centNote(cents[i]);
+}
+
+// Build a 5-note pentatonic scale (cents-based)
+static void makePentatonicScale(_NT_sclNote* notes)
+{
+    // Major pentatonic: 200, 400, 700, 900, 1200 cents
+    static const double cents[] = { 200.0, 400.0, 700.0, 900.0, 1200.0 };
+    for (int i = 0; i < 5; ++i)
+        notes[i] = centNote(cents[i]);
+}
+
+static void test_scale_loaded_melody_pitches()
+{
+    // With a loaded scale, pitches should come from scale->quantize(),
+    // not the chromatic fallback (degree/12.0).
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.init(48000);
+
+    _NT_sclNote notes[7];
+    makeMajorScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 7);
+
+    // Generate a full loop with scale
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(&scale);
+        ASSERT_FLOAT_EQ(out.gate, 5.0f, "scale melody: gate=5V");
+        // With a 7-note major scale, degrees are 0-6.
+        // Pitch should match scale->quantize(degree, 0, 0) for some degree.
+        // Just verify pitch is non-negative and gate is present.
+        ASSERT_TRUE(out.pitch >= 0.0f, "scale melody: pitch >= 0");
+    }
+}
+
+static void test_scale_loaded_structured_intervals()
+{
+    // Structured harmony with a loaded scale should produce pitches that
+    // differ by the voicing interval applied through the scale quantizer.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroHarmonyMode, FerromagneticEngine::kHarmonyStructured);
+    engine.parameterChanged(FerromagneticEngine::kFerroVoicing, FerromagneticEngine::kVoicingTriads);
+    engine.init(48000);
+
+    _NT_sclNote notes[7];
+    makeMajorScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 7);
+
+    // Layer 0
+    float layer0pitch[4];
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(&scale);
+        layer0pitch[i] = out.pitch;
+    }
+
+    // Layer 1 (Triads: +2 scale degrees above layer 0)
+    float layer1pitch[4];
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(&scale);
+        layer1pitch[i] = out.pitch;
+    }
+
+    // Layer 1 should differ from layer 0 (interval of 2 scale degrees)
+    for (int i = 0; i < 4; i++) {
+        ASSERT_TRUE(layer1pitch[i] > layer0pitch[i],
+            "scale structured: layer 1 pitch > layer 0 pitch");
+    }
+}
+
+static void test_scale_loaded_generative()
+{
+    // Generative mode with a loaded scale should produce valid pitches.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 3);
+    engine.parameterChanged(FerromagneticEngine::kFerroHarmonyMode, FerromagneticEngine::kHarmonyGenerative);
+    engine.parameterChanged(FerromagneticEngine::kFerroOctSpread, 0);
+    engine.init(48000);
+
+    _NT_sclNote notes[7];
+    makeMajorScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 7);
+
+    // Build all 3 layers (12 ticks total)
+    for (int i = 0; i < 12; i++) {
+        EngineOutput out = engine.clockTick(&scale);
+        if (out.gate > 0.0f) {
+            ASSERT_TRUE(out.pitch >= 0.0f, "scale generative: pitch >= 0");
+            ASSERT_TRUE(out.midiNote <= 127, "scale generative: midiNote <= 127");
+        }
+    }
+}
+
+static void test_scale_triggers_reset()
+{
+    // When a scale first becomes available, the engine should reset.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 8);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 2);
+    engine.init(48000);
+
+    // Clock a few ticks without scale
+    for (int i = 0; i < 3; i++)
+        engine.clockTick(nullptr);
+    ASSERT_EQ(engine.currentStep(), 3, "pre-scale: tick=3");
+
+    // Now provide a scale -- should trigger reset
+    _NT_sclNote notes[7];
+    makeMajorScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 7);
+
+    engine.clockTick(&scale);
+    // After reset, tick advances from 0 to 1
+    ASSERT_EQ(engine.currentStep(), 1, "scale load: reset then tick=1");
+}
+
+static void test_pentatonic_scale_degrees()
+{
+    // A 5-note scale should use numDegrees_=5, not the default 7.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.init(48000);
+
+    _NT_sclNote notes[5];
+    makePentatonicScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 5);
+
+    // Should not crash and should produce valid output
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(&scale);
+        ASSERT_FLOAT_EQ(out.gate, 5.0f, "pentatonic: gate=5V");
+        ASSERT_TRUE(out.pitch >= 0.0f, "pentatonic: pitch >= 0");
+    }
+}
+
+static void test_scale_new_inversion_with_scale()
+{
+    // New Inversion with a loaded scale should cycle through inversions
+    // without crashing or producing extreme pitches.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 2);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.parameterChanged(FerromagneticEngine::kFerroCompletion, FerromagneticEngine::kCompletionNewInversion);
+    engine.init(48000);
+
+    _NT_sclNote notes[7];
+    makeMajorScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 7);
+
+    // Run through 20 inversion cycles (40 ticks)
+    for (int cycle = 0; cycle < 20; cycle++) {
+        for (int t = 0; t < 2; t++) {
+            EngineOutput out = engine.clockTick(&scale);
+            if (out.gate > 0.0f) {
+                // Pitch should stay reasonable (within a few octaves)
+                ASSERT_TRUE(out.pitch < 5.0f, "scale inversion: pitch < 5V");
+                ASSERT_TRUE(out.pitch >= -1.0f, "scale inversion: pitch >= -1V");
+            }
+        }
+    }
+}
+
+static void test_scale_loaded_midi_notes()
+{
+    // With a loaded scale, midiNote should come from scaleDegreeToMidi.
+    FerromagneticEngine engine;
+    engine.parameterChanged(FerromagneticEngine::kFerroNoteDensity, 100);
+    engine.parameterChanged(FerromagneticEngine::kFerroLoopSteps, 4);
+    engine.parameterChanged(FerromagneticEngine::kFerroMaxLayers, 1);
+    engine.init(48000);
+
+    _NT_sclNote notes[7];
+    makeMajorScale(notes);
+    ScaleQuantizer scale;
+    scale.loadScale(notes, 7);
+
+    for (int i = 0; i < 4; i++) {
+        EngineOutput out = engine.clockTick(&scale);
+        ASSERT_TRUE(out.midiNote <= 127, "scale midi: note <= 127");
+        ASSERT_TRUE(out.midiNote >= 0, "scale midi: note >= 0");
+    }
+}
+
 int main()
 {
     // 1. Lifecycle
@@ -970,6 +1185,15 @@ int main()
     test_maxlayers_increase_after_completion();
     test_loop_trigger_velocity();
     test_focus_bar_playhead_tracks_tick();
+
+    // 14. Scale-loaded tests
+    test_scale_loaded_melody_pitches();
+    test_scale_loaded_structured_intervals();
+    test_scale_loaded_generative();
+    test_scale_triggers_reset();
+    test_pentatonic_scale_degrees();
+    test_scale_new_inversion_with_scale();
+    test_scale_loaded_midi_notes();
 
     printf("%d tests, %d failures\n", tests, failures);
     return failures ? 1 : 0;
