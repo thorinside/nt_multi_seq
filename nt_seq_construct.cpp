@@ -3,6 +3,7 @@
 #include "engines/AeSequencerEngine.h"
 #include "engines/SeqMarkovEngine.h"
 #include "engines/ThorpEngine.h"
+#include "engines/FerromagneticEngine.h"
 #include <new>
 #include <string.h>
 
@@ -12,14 +13,17 @@ static_assert(sizeof(SomaEngine) <= 2048, "SomaEngine exceeds pool slot");
 static_assert(sizeof(AeSequencerEngine) <= 2048, "AeSequencerEngine exceeds pool slot");
 static_assert(sizeof(SeqMarkovEngine) <= 2048, "SeqMarkovEngine exceeds pool slot");
 static_assert(sizeof(ThorpEngine) <= 2048, "ThorpEngine exceeds pool slot");
+static_assert(sizeof(FerromagneticEngine) <= 2048, "FerromagneticEngine exceeds pool slot");
 static_assert(alignof(SomaEngine) <= 8, "SomaEngine alignment exceeds pool");
 static_assert(alignof(AeSequencerEngine) <= 8, "AeSequencerEngine alignment exceeds pool");
 static_assert(alignof(SeqMarkovEngine) <= 8, "SeqMarkovEngine alignment exceeds pool");
 static_assert(alignof(ThorpEngine) <= 8, "ThorpEngine alignment exceeds pool");
+static_assert(alignof(FerromagneticEngine) <= 8, "FerromagneticEngine alignment exceeds pool");
 static_assert(SomaEngine::kNumSomaParams <= kMaxEngineParams, "SomaEngine has too many params");
 static_assert(AeSequencerEngine::kNumAeParams <= kMaxEngineParams, "AeSequencerEngine has too many params");
 static_assert(SeqMarkovEngine::kNumMarkovParams <= kMaxEngineParams, "SeqMarkovEngine has too many params");
 static_assert(ThorpEngine::kNumThorpParams <= kMaxEngineParams, "ThorpEngine has too many params");
+static_assert(FerromagneticEngine::kNumFerroParams <= kMaxEngineParams, "FerromagneticEngine has too many params");
 static_assert(ARRAY_SIZE(specifications) == NUM_SPECS, "specifications array must match NUM_SPECS");
 
 // Per-channel common parameters (static definitions as templates)

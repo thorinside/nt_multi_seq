@@ -68,6 +68,7 @@ enum EngineType {
     kEngineSoma,
     kEngineAeSeq,
     kEngineSeqMarkov,
+    kEngineFerro,
     kNumEngineTypes
 };
 
@@ -101,7 +102,7 @@ static const _NT_specification specifications[] = {
 // --- Enum string arrays ---
 // Engine type with None for the runtime param (0=None, 1=Thorp, 2=Soma, 3=AE Seq, 4=Markov)
 static const char* const engineTypeWithNoneStrings[] = {
-    "None", "Thorp", "Soma", "AE Seq", "Markov", nullptr
+    "None", "Thorp", "Soma", "AE Seq", "Markov", "Ferro", nullptr
 };
 
 static const char* const routingStrings[] = {

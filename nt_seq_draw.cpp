@@ -3,6 +3,7 @@
 #include "engines/AeSequencerEngine.h"
 #include "engines/SeqMarkovEngine.h"
 #include "engines/SomaEngine.h"
+#include "engines/FerromagneticEngine.h"
 #include <string.h>
 
 static const char* rootNoteNames[] = {
@@ -62,7 +63,7 @@ static void drawFocusBars(int x, int y, int w, int h, const FocusBarInfo& info)
 
         // Per-step segments
         int segW = w / bar.length;
-        if (segW < 2) segW = 2;
+        if (segW < 1) segW = 1;
 
         for (int i = 0; i < bar.length && i < kMaxBarSteps && i * segW < w; ++i) {
             int sx0 = x + i * segW;
@@ -367,6 +368,9 @@ uint32_t hasCustomUi(_NT_algorithm* self)
         controls |= kNT_encoderL | kNT_encoderR;
         controls |= kNT_potL | kNT_potC | kNT_potR;
         controls |= kNT_potButtonL | kNT_potButtonR;
+    } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineFerro) {
+        controls |= kNT_encoderL | kNT_encoderR;
+        controls |= kNT_potL | kNT_potC | kNT_potR;
     }
     return controls;
 }
@@ -536,6 +540,48 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         // Pot Button R: Regenerate
         if ((data.controls & kNT_potButtonR) && !(data.lastButtons & kNT_potButtonR))
             mk->uiForceRegenerate();
+        return;
+    }
+
+    // Ferro focus controls
+    if (alg->channels[focus].engineType == kEngineFerro && alg->channels[focus].engine) {
+        int engBase = alg->channels[focus].engineParamBase;
+
+        // Encoder L: Loop Steps (2-128)
+        if (data.encoders[0] != 0) {
+            int v = alg->v[engBase + FerromagneticEngine::kFerroLoopSteps] + data.encoders[0];
+            if (v < 2) v = 2;
+            if (v > 128) v = 128;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + FerromagneticEngine::kFerroLoopSteps) + paramOffset, (int16_t)v);
+        }
+        // Encoder R: Max Layers (1-8)
+        if (data.encoders[1] != 0) {
+            int v = alg->v[engBase + FerromagneticEngine::kFerroMaxLayers] + data.encoders[1];
+            if (v < 1) v = 1;
+            if (v > 8) v = 8;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + FerromagneticEngine::kFerroMaxLayers) + paramOffset, (int16_t)v);
+        }
+        // Pot L: Note Density (0-100%)
+        if (data.controls & kNT_potL) {
+            int v = (int)(data.pots[0] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + FerromagneticEngine::kFerroNoteDensity) + paramOffset, (int16_t)v);
+        }
+        // Pot C: Gate Length (10-100%)
+        if (data.controls & kNT_potC) {
+            int v = 10 + (int)(data.pots[1] * 90.0f + 0.5f);
+            if (v < 10) v = 10;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + FerromagneticEngine::kFerroGateLength) + paramOffset, (int16_t)v);
+        }
+        // Pot R: Velocity (0-100%)
+        if (data.controls & kNT_potR) {
+            int v = (int)(data.pots[2] * 100.0f + 0.5f);
+            if (v < 0) v = 0;
+            if (v > 100) v = 100;
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + FerromagneticEngine::kFerroVelocity) + paramOffset, (int16_t)v);
+        }
         return;
     }
 

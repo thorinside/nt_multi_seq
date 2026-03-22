@@ -3,6 +3,7 @@
 #include "engines/SomaEngine.h"
 #include "engines/AeSequencerEngine.h"
 #include "engines/SeqMarkovEngine.h"
+#include "engines/FerromagneticEngine.h"
 #include <new>
 #include <string.h>
 
@@ -35,6 +36,7 @@ static const char* engineName(EngineType type)
     case kEngineSoma:      return "Soma";
     case kEngineAeSeq:     return "AE Seq";
     case kEngineSeqMarkov: return "Markov";
+    case kEngineFerro:     return "Ferro";
     default:               return "";
     }
 }
@@ -47,6 +49,7 @@ static SequencerEngine* createEngine(EngineType type, uint8_t* mem)
     case kEngineSoma:      return new (mem) SomaEngine();
     case kEngineAeSeq:     return new (mem) AeSequencerEngine();
     case kEngineSeqMarkov: return new (mem) SeqMarkovEngine();
+    case kEngineFerro:     return new (mem) FerromagneticEngine();
     default:               return nullptr;
     }
 }

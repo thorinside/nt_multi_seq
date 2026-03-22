@@ -15,7 +15,7 @@ struct EngineOutput {
 
 // --- Focus view data structs (engine -> renderer) ---
 
-static constexpr int kMaxBarSteps = 32;
+static constexpr int kMaxBarSteps = 128;
 static constexpr int kMaxFocusBars = 2;
 
 struct FocusBar {
