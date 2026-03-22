@@ -77,7 +77,7 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
     uint32_t paramOffset = NT_parameterOffset();
     int engBase = alg->channels[ch].engineParamBase;
 
-    // Convert param value (0=None,1=Thorp,2=Soma,3=AE,4=Markov) to EngineType
+    // Convert param value (0=None,1=Thorp,2=Soma,3=AE,4=Markov,5=Ferro) to EngineType
     EngineType newType;
     if (newTypeWithNone <= 0 || newTypeWithNone > kNumEngineTypes)
         newType = kEngineNone;

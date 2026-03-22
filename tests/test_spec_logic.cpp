@@ -35,8 +35,9 @@ static void test_specEngineName()
     ASSERT_STR_EQ(specEngineName(1), "Soma", "engine 1 -> Soma");
     ASSERT_STR_EQ(specEngineName(2), "AE Seq", "engine 2 -> AE Seq");
     ASSERT_STR_EQ(specEngineName(3), "Markov", "engine 3 -> Markov");
+    ASSERT_STR_EQ(specEngineName(4), "Ferro", "engine 4 -> Ferro");
     ASSERT_STR_EQ(specEngineName(-1), "?", "engine -1 -> ?");
-    ASSERT_STR_EQ(specEngineName(4), "?", "engine 4 -> ?");
+    ASSERT_STR_EQ(specEngineName(5), "?", "engine 5 -> ?");
 }
 
 // --- Test: specStrCopy ---

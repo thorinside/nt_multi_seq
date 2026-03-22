@@ -125,7 +125,7 @@ int FerromagneticEngine::weightedPick(int numDegrees)
 void FerromagneticEngine::generateLayerZeroNote(int tick, const ScaleQuantizer* scale)
 {
     // Density check
-    if (rngFloat() * 100.0f >= (float)noteDensity_) {
+    if (rngFloat() * 100.0f > (float)noteDensity_) {
         layerNotes_[0][tick] = 0xFF;
         setGateBit(0, tick, false);
         return;

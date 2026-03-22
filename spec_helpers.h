@@ -6,9 +6,9 @@
 // No NT API dependency.
 
 // Number of engine types (must match kNumEngineTypes)
-static const int kSpecNumEngines = 4;
+static const int kSpecNumEngines = 5;
 
-// Engine name lookup by engine type index (0-3)
+// Engine name lookup by engine type index (0-4)
 static inline const char* specEngineName(int engineType)
 {
     switch (engineType) {
@@ -16,6 +16,7 @@ static inline const char* specEngineName(int engineType)
     case 1: return "Soma";
     case 2: return "AE Seq";
     case 3: return "Markov";
+    case 4: return "Ferro";
     default: return "?";
     }
 }
