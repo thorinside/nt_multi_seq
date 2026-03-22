@@ -249,7 +249,7 @@ void FerromagneticEngine::handleLoopWrap()
         if (currentLayer_ + 1 >= maxLayers_) {
             // All layers built
             if (completion_ == kCompletionNewInversion) {
-                inversionOffset_++;
+                inversionOffset_ = (inversionOffset_ + 1) % numDegrees_;
                 resetLoop();
                 return;
             }
