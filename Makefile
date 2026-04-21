@@ -23,7 +23,8 @@ SOURCES = \
 	engines/AeSequencerEngine.cpp \
 	engines/SeqMarkovEngine.cpp \
 	engines/ThorpEngine.cpp \
-	engines/FerromagneticEngine.cpp
+	engines/FerromagneticEngine.cpp \
+	engines/QuantumEngine.cpp
 
 # Include paths
 INCLUDES = \
@@ -126,7 +127,8 @@ UNIT_TESTS = \
 	$(BUILD_DIR)/test_soma_engine \
 	$(BUILD_DIR)/test_ae_engine \
 	$(BUILD_DIR)/test_markov_engine \
-	$(BUILD_DIR)/test_ferro_engine
+	$(BUILD_DIR)/test_ferro_engine \
+	$(BUILD_DIR)/test_quantum_engine
 
 unit-test: $(UNIT_TESTS)
 	@for t in $(UNIT_TESTS); do echo "--- $$t ---"; ./$$t || exit 1; done
@@ -154,6 +156,9 @@ $(BUILD_DIR)/test_markov_engine: tests/test_markov_engine.cpp tests/nt_stubs.h e
 
 $(BUILD_DIR)/test_ferro_engine: tests/test_ferro_engine.cpp tests/nt_stubs.h engines/FerromagneticEngine.cpp engines/FerromagneticEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_ferro_engine.cpp -lm -o $@
+
+$(BUILD_DIR)/test_quantum_engine: tests/test_quantum_engine.cpp tests/nt_stubs.h engines/QuantumEngine.cpp engines/QuantumEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_quantum_engine.cpp -lm -o $@
 
 # Clean build artifacts
 clean:

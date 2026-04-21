@@ -4,6 +4,7 @@
 #include "engines/AeSequencerEngine.h"
 #include "engines/SeqMarkovEngine.h"
 #include "engines/FerromagneticEngine.h"
+#include "engines/QuantumEngine.h"
 #include <new>
 #include <string.h>
 
@@ -37,6 +38,7 @@ static const char* engineName(EngineType type)
     case kEngineAeSeq:     return "AE Seq";
     case kEngineSeqMarkov: return "Markov";
     case kEngineFerro:     return "Ferro";
+    case kEngineQuantum:   return "Quantum";
     default:               return "";
     }
 }
@@ -50,6 +52,7 @@ static SequencerEngine* createEngine(EngineType type, uint8_t* mem)
     case kEngineAeSeq:     return new (mem) AeSequencerEngine();
     case kEngineSeqMarkov: return new (mem) SeqMarkovEngine();
     case kEngineFerro:     return new (mem) FerromagneticEngine();
+    case kEngineQuantum:   return new (mem) QuantumEngine();
     default:               return nullptr;
     }
 }
