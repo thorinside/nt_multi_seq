@@ -411,8 +411,22 @@ int QuantumEngine::getParameterDefs(_NT_parameter* defs) const
 
 int QuantumEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
 {
+    // First 5 map to the 2 encoders + 3 pots on hardware.
+    // Put the most performable params there: shape, range, length, M action, gate density.
+    static const uint8_t order[kNumQuantumParams] = {
+        kQContour,
+        kQRange,
+        kQMotifLen,
+        kQMTransform,
+        kQGateDensity,
+        kQMEvery,
+        kQLAction,
+        kQLEvery,
+        kQGateLen,
+        kQVelocity
+    };
     for (int i = 0; i < kNumQuantumParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + i);
+        indices[i] = (uint8_t)(baseParamIndex + order[i]);
     page->name = "Quantum";
     page->numParams = kNumQuantumParams;
     page->group = 0;
@@ -448,42 +462,76 @@ void QuantumEngine::getFocusDetail(FocusDetail& detail) const
     line1.clear();
     line2.clear();
 
-    // Line 1: "Step:3/8 Cycle:5 T:+2"
-    line1.append("Step:", 8);
+    // Line 1: contour shape, step position, transpose offset
+    line1.append(contourStrings[contour_ < kNumContours ? contour_ : 0], 15);
+    line1.append(" ", 8);
     line1.appendInt(stepInMotif_ + 1, 8);
     line1.appendChar('/', 8);
     line1.appendInt(motifLen_, 8);
-    line1.append(" Cyc:", 8);
-    line1.appendInt(motifCycles_, 8);
-    line1.append(" T:", 8);
-    line1.appendInt(transpose_, 8);
 
-    // Line 2: contour name + M/L info
-    line2.append(contourStrings[contour_ < kNumContours ? contour_ : 0], 6);
-    line2.append(" M:", 6);
-    line2.append(mTransformStrings[mTransform_ < kNumMTransforms ? mTransform_ : 0], 6);
-    line2.append(" L:", 6);
-    line2.append(lActionStrings[lAction_ < kNumLActions ? lAction_ : 0], 6);
+    if (transpose_ != 0 || octaveShift_ != 0) {
+        line1.append(" T:", 8);
+        line1.appendInt(transpose_, 8);
+        if (octaveShift_ != 0) {
+            line1.append(" O:", 8);
+            line1.appendInt(octaveShift_, 8);
+        }
+    }
+
+    // Line 2: M countdown -> action, L countdown -> action
+    int mCountdown = mEvery_ - (motifCycles_ % mEvery_);
+    int mCyclesIntoL = mCycleCount_ % lEvery_;
+    int lCountdown = lEvery_ - mCyclesIntoL;
+
+    line2.append("M:", 11);
+    line2.appendInt(mCountdown, 11);
+    line2.appendChar('>', 8);
+    line2.append(mTransformStrings[mTransform_ < kNumMTransforms ? mTransform_ : 0], 11);
+    line2.append(" L:", 13);
+    line2.appendInt(lCountdown, 13);
+    line2.appendChar('>', 8);
+    line2.append(lActionStrings[lAction_ < kNumLActions ? lAction_ : 0], 13);
 }
 
 void QuantumEngine::getFocusBarInfo(FocusBarInfo& info) const
 {
-    info.numBars = 1;
-    FocusBar& bar = info.bars[0];
-    bar.length = motifLen_;
-    bar.playhead = stepInMotif_;
+    info.numBars = 2;
 
-    // Brightness: show motif contour (pitch height) and gates
+    // Bar 1: motif pitch contour with gate/rest distinction
+    FocusBar& bar1 = info.bars[0];
+    bar1.length = motifLen_;
+    bar1.playhead = stepInMotif_;
+
     for (int i = 0; i < motifLen_ && i < kMaxBarSteps; ++i) {
         if (!gates_[i]) {
-            bar.levels[i] = 1;  // Rest = dim
+            bar1.levels[i] = 1;  // Rest = dim
         } else {
-            // Map motif degree to brightness 3-15
             int deg = motif_[i];
             int maxDeg = range_ > 1 ? range_ - 1 : 1;
             int level = 3 + (deg * 12) / maxDeg;
             if (level > 15) level = 15;
-            bar.levels[i] = (uint8_t)level;
+            bar1.levels[i] = (uint8_t)level;
         }
+    }
+
+    // Bar 2: M/L cycle progress
+    // Total length = mEvery_ slots. Filled slots = repeats done this M cycle.
+    // Brightness ramps up as L trigger approaches.
+    FocusBar& bar2 = info.bars[1];
+    bar2.length = mEvery_;
+    bar2.playhead = -1;  // No moving playhead
+
+    int repeatsThisCycle = motifCycles_ % mEvery_;
+    int mCyclesIntoL = mCycleCount_ % lEvery_;
+
+    // Base brightness scales with how close L trigger is
+    int lProgress = (mCyclesIntoL * 10) / (lEvery_ > 1 ? lEvery_ : 1);
+    int baseBright = 3 + lProgress;  // 3-13
+
+    for (int i = 0; i < mEvery_ && i < kMaxBarSteps; ++i) {
+        if (i < repeatsThisCycle)
+            bar2.levels[i] = (uint8_t)baseBright;
+        else
+            bar2.levels[i] = 1;
     }
 }

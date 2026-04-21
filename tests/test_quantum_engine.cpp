@@ -418,9 +418,11 @@ static void test_focus_bar()
 
     FocusBarInfo info;
     engine.getFocusBarInfo(info);
-    ASSERT_EQ(info.numBars, 1, "focus: 1 bar");
-    ASSERT_EQ(info.bars[0].length, 8, "focus bar length = motifLen");
-    ASSERT_EQ(info.bars[0].playhead, 0, "focus playhead at 0");
+    ASSERT_EQ(info.numBars, 2, "focus: 2 bars");
+    ASSERT_EQ(info.bars[0].length, 8, "focus bar 1 length = motifLen");
+    ASSERT_EQ(info.bars[0].playhead, 0, "focus bar 1 playhead at 0");
+    ASSERT_EQ(info.bars[1].length, 4, "focus bar 2 length = mEvery default");
+    ASSERT_EQ(info.bars[1].playhead, -1, "focus bar 2 no playhead");
 }
 
 static void test_focus_detail()
