@@ -60,9 +60,6 @@ public:
     // Return the number of engine-specific parameters, filling defs[]
     virtual int getParameterDefs(_NT_parameter* defs) const = 0;
 
-    // Return the number of engine page parameters, filling pages/indices
-    virtual int getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const = 0;
-
     virtual const char* name() const = 0;
 
     // Focus view: fill data structs for rendering by the host.

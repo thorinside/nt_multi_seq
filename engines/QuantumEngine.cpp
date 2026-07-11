@@ -409,33 +409,6 @@ int QuantumEngine::getParameterDefs(_NT_parameter* defs) const
     return kNumQuantumParams;
 }
 
-int QuantumEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
-{
-    // First 5 map to the 2 encoders + 3 pots on hardware.
-    // Put the most performable params there: shape, range, length, M action, gate density.
-    static const uint8_t order[kNumQuantumParams] = {
-        kQContour,
-        kQRange,
-        kQMotifLen,
-        kQMTransform,
-        kQGateDensity,
-        kQMEvery,
-        kQLAction,
-        kQLEvery,
-        kQGateLen,
-        kQVelocity
-    };
-    for (int i = 0; i < kNumQuantumParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + order[i]);
-    page->name = "Quantum";
-    page->numParams = kNumQuantumParams;
-    page->group = 0;
-    page->unused[0] = 0;
-    page->unused[1] = 0;
-    page->params = indices;
-    return kNumQuantumParams;
-}
-
 // --- UI ---
 
 int QuantumEngine::currentStep() const { return stepInMotif_; }

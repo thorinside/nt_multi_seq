@@ -228,16 +228,3 @@ void SomaEngine::getFocusDetail(FocusDetail& detail) const
     line2.append("  Length:", 6);
     line2.appendInt(length_, 6);
 }
-
-int SomaEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
-{
-    for (int i = 0; i < kNumSomaParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + i);
-    page->name = "Soma";
-    page->numParams = kNumSomaParams;
-    page->group = 0;
-    page->unused[0] = 0;
-    page->unused[1] = 0;
-    page->params = indices;
-    return kNumSomaParams;
-}

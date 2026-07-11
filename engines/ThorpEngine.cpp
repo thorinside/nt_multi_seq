@@ -706,19 +706,6 @@ int ThorpEngine::midiInputChannel() const
     return midiInCh_;  // 0=omni, 1-16=specific channel
 }
 
-int ThorpEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
-{
-    for (int i = 0; i < kNumThorpParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + i);
-    page->name = "Thorp";
-    page->numParams = kNumThorpParams;
-    page->group = 0;
-    page->unused[0] = 0;
-    page->unused[1] = 0;
-    page->params = indices;
-    return kNumThorpParams;
-}
-
 void ThorpEngine::serialise(_NT_jsonStream& stream) const
 {
     // Chain order (16 uint8_t values, 0-indexed)

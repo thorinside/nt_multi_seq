@@ -439,19 +439,6 @@ int FerromagneticEngine::getParameterDefs(_NT_parameter* defs) const
     return kNumFerroParams;
 }
 
-int FerromagneticEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
-{
-    for (int i = 0; i < kNumFerroParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + i);
-    page->name = "Ferro";
-    page->numParams = kNumFerroParams;
-    page->group = 0;
-    page->unused[0] = 0;
-    page->unused[1] = 0;
-    page->params = indices;
-    return kNumFerroParams;
-}
-
 int FerromagneticEngine::currentStep() const { return currentTick_; }
 int FerromagneticEngine::sequenceLength() const { return loopSteps_; }
 

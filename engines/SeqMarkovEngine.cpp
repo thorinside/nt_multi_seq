@@ -605,16 +605,3 @@ void SeqMarkovEngine::getFocusBarInfo(FocusBarInfo& info) const
     if (currentStep_ >= 0 && currentStep_ < kMaxBarSteps)
         bar.levels[currentStep_] = 15;  // bright playhead
 }
-
-int SeqMarkovEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
-{
-    for (int i = 0; i < kNumMarkovParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + i);
-    page->name = "Markov";
-    page->numParams = kNumMarkovParams;
-    page->group = 0;
-    page->unused[0] = 0;
-    page->unused[1] = 0;
-    page->params = indices;
-    return kNumMarkovParams;
-}

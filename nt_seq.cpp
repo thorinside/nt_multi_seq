@@ -9,16 +9,12 @@
 void operator delete(void*) noexcept {}
 #endif
 
-// Forward declarations
-void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specifications);
-_NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorithmRequirements& req, const int32_t* specifications);
 void parameterChanged(_NT_algorithm* self, int p);
 void step(_NT_algorithm* self, float* busFrames, int numFramesBy4);
 void midiMessage(_NT_algorithm* self, uint8_t byte0, uint8_t byte1, uint8_t byte2);
 bool draw(_NT_algorithm* self);
 uint32_t hasCustomUi(_NT_algorithm* self);
 void customUi(_NT_algorithm* self, const _NT_uiData& data);
-int parameterUiPrefix(_NT_algorithm* self, int p, char* buff);
 int parameterString(_NT_algorithm* self, int p, int v, char* buff);
 
 template<EngineType Type>
@@ -26,7 +22,8 @@ static void calculateDedicatedRequirements(
     _NT_algorithmRequirements& req,
     const int32_t* specifications)
 {
-    calculateRequirementsForEngine(req, specifications, Type);
+    (void)specifications;
+    calculateRequirementsForEngine(req, Type);
 }
 
 template<EngineType Type>
@@ -35,22 +32,18 @@ static _NT_algorithm* constructDedicated(
     const _NT_algorithmRequirements& req,
     const int32_t* specifications)
 {
-    return constructForEngine(ptrs, req, specifications, Type);
+    (void)specifications;
+    return constructForEngine(ptrs, req, Type);
 }
 
 void serialise(_NT_algorithm* self, _NT_jsonStream& stream)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
-    // Store engine type per channel, then delegate to engine for extra state
-    for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
-        // Engine type is already in v[] (framework saves it), but Thorp has extra state
-        if (alg->channels[ch].engineType == kEngineThorp && alg->channels[ch].engine) {
-            char name[4] = { 't', (char)('0' + ch), 0, 0 };
-            stream.addMemberName(name);
-            stream.openObject();
-            static_cast<ThorpEngine*>(alg->channels[ch].engine)->serialise(stream);
-            stream.closeObject();
-        }
+    if (alg->seq.engineType == kEngineThorp && alg->seq.engine) {
+        stream.addMemberName("thorp");
+        stream.openObject();
+        static_cast<ThorpEngine*>(alg->seq.engine)->serialise(stream);
+        stream.closeObject();
     }
 }
 
@@ -63,15 +56,11 @@ bool deserialise(_NT_algorithm* self, _NT_jsonParse& parse)
 
     for (int m = 0; m < numMembers; ++m) {
         bool matched = false;
-        for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
-            if (alg->channels[ch].engineType == kEngineThorp && alg->channels[ch].engine) {
-                char name[4] = { 't', (char)('0' + ch), 0, 0 };
-                if (parse.matchName(name)) {
-                    if (!static_cast<ThorpEngine*>(alg->channels[ch].engine)->deserialise(parse))
-                        return false;
-                    matched = true;
-                    break;
-                }
+        if (alg->seq.engineType == kEngineThorp && alg->seq.engine) {
+            if (parse.matchName("thorp")) {
+                if (!static_cast<ThorpEngine*>(alg->seq.engine)->deserialise(parse))
+                    return false;
+                matched = true;
             }
         }
         if (!matched) {
@@ -82,39 +71,13 @@ bool deserialise(_NT_algorithm* self, _NT_jsonParse& parse)
     return true;
 }
 
-static const _NT_factory legacyFactory = {
-    .guid = NT_MULTICHAR('T', 'h', 'M', 's'),
-    .name = "nt_multi_seq",
-    .description = "Multi-channel sequencer with runtime engine selection",
-    .numSpecifications = ARRAY_SIZE(specifications),
-    .specifications = specifications,
-    .calculateStaticRequirements = nullptr,
-    .initialise = nullptr,
-    .calculateRequirements = calculateRequirements,
-    .construct = construct,
-    .parameterChanged = parameterChanged,
-    .step = step,
-    .draw = draw,
-    .midiRealtime = nullptr,
-    .midiMessage = midiMessage,
-    .tags = kNT_tagInstrument,
-    .hasCustomUi = hasCustomUi,
-    .customUi = customUi,
-    .setupUi = nullptr,
-    .serialise = serialise,
-    .deserialise = deserialise,
-    .midiSysEx = nullptr,
-    .parameterUiPrefix = parameterUiPrefix,
-    .parameterString = parameterString,
-};
-
 #define DEDICATED_FACTORY(variableName, factoryGuid, factoryName, factoryDescription, engineType) \
     static const _NT_factory variableName = { \
         .guid = factoryGuid, \
         .name = factoryName, \
         .description = factoryDescription, \
-        .numSpecifications = ARRAY_SIZE(specifications), \
-        .specifications = specifications, \
+        .numSpecifications = 0, \
+        .specifications = nullptr, \
         .calculateStaticRequirements = nullptr, \
         .initialise = nullptr, \
         .calculateRequirements = calculateDedicatedRequirements<engineType>, \
@@ -131,7 +94,7 @@ static const _NT_factory legacyFactory = {
         .serialise = serialise, \
         .deserialise = deserialise, \
         .midiSysEx = nullptr, \
-        .parameterUiPrefix = parameterUiPrefix, \
+        .parameterUiPrefix = nullptr, \
         .parameterString = parameterString, \
     }
 
@@ -157,7 +120,6 @@ DEDICATED_FACTORY(quantumFactory,
 #undef DEDICATED_FACTORY
 
 static const _NT_factory* const factories[] = {
-    &legacyFactory,
     &thorpFactory,
     &somaFactory,
     &aeSeqFactory,

@@ -120,7 +120,6 @@ CXXFLAGS_UNIT = -std=c++11 -Wall -Wextra -Wno-unused-parameter
 
 # Unit test target - standalone tests (no NT runtime dependency)
 UNIT_TESTS = \
-	$(BUILD_DIR)/test_spec_logic \
 	$(BUILD_DIR)/test_scale_quantizer \
 	$(BUILD_DIR)/test_clock_processor \
 	$(BUILD_DIR)/test_thorp_engine \
@@ -133,9 +132,6 @@ UNIT_TESTS = \
 
 unit-test: $(UNIT_TESTS)
 	@for t in $(UNIT_TESTS); do echo "--- $$t ---"; ./$$t || exit 1; done
-
-$(BUILD_DIR)/test_spec_logic: tests/test_spec_logic.cpp spec_helpers.h | $(BUILD_DIR)
-	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. tests/test_spec_logic.cpp -o $@
 
 $(BUILD_DIR)/test_scale_quantizer: tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_scale_quantizer.cpp scale/ScaleQuantizer.cpp -lm -o $@

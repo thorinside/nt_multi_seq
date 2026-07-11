@@ -336,30 +336,3 @@ void AeSequencerEngine::getFocusDetail(FocusDetail& detail) const
     line2.appendInt(threshold_, 6);
     line2.appendChar('%', 6);
 }
-
-int AeSequencerEngine::getPageDefs(_NT_parameterPage* page, uint8_t* indices, int baseParamIndex) const
-{
-    // Order chosen so hosts that effectively render only the first few
-    // entries still expose core AE shaping controls.
-    static const uint8_t order[kNumAeParams] = {
-        kAeCvSteps,
-        kAeMinCv,
-        kAeMaxCv,
-        kAeBitDepth,
-        kAeThreshold,
-        kAeCvSeq,
-        kAeGateSeq,
-        kAeGateSteps,
-        kAePolarity,
-        kAeVelocity
-    };
-    for (int i = 0; i < kNumAeParams; ++i)
-        indices[i] = (uint8_t)(baseParamIndex + (int)order[i]);
-    page->name = "AE Seq";
-    page->numParams = kNumAeParams;
-    page->group = 0;
-    page->unused[0] = 0;
-    page->unused[1] = 0;
-    page->params = indices;
-    return kNumAeParams;
-}

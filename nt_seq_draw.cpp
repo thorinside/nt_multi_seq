@@ -4,6 +4,7 @@
 #include "engines/SeqMarkovEngine.h"
 #include "engines/SomaEngine.h"
 #include "engines/FerromagneticEngine.h"
+#include "engines/QuantumEngine.h"
 #include <string.h>
 
 static const char* rootNoteNames[] = {
@@ -118,110 +119,15 @@ static void drawFocusDetailLines(int y1, int y2, const FocusDetail& detail)
     }
 }
 
-// --- Overview mode ---
-
-static void drawOverview(NtSeq* alg)
-{
-    char buf[48];
-
-    // Title: "Multi Seq" + scale info + "[R]:focus"
-    NT_drawText(0, 12, "Multi Seq", 15, kNT_textLeft, kNT_textTiny);
-
-    // Scale info: root note + scale name
-    int rootNote = alg->v[kParamRootNote];
-    int octave = alg->v[kParamOctave];
-    if (rootNote >= 0 && rootNote < 12) {
-        int len = 0;
-        const char* rn = rootNoteNames[rootNote];
-        while (*rn) buf[len++] = *rn++;
-        len += NT_intToString(buf + len, octave);
-        buf[len] = 0;
-        NT_drawText(60, 12, buf, 8, kNT_textLeft, kNT_textTiny);
-    }
-    if (alg->sclName[0] != 0) {
-        int len = 0;
-        const char* sn = alg->sclName;
-        while (*sn && len < 20) buf[len++] = *sn++;
-        if (alg->scaleQuantizer.isLoaded()) {
-            buf[len++] = ' ';
-            buf[len++] = '(';
-            len += NT_intToString(buf + len, (int32_t)alg->scaleQuantizer.numNotes());
-            buf[len++] = ')';
-        }
-        buf[len] = 0;
-        NT_drawText(85, 12, buf, 6, kNT_textLeft, kNT_textTiny);
-    }
-
-    NT_drawText(255, 12, "[R]:focus", 5, kNT_textRight, kNT_textTiny);
-
-    // Per-channel rows
-    int y = 21;
-    bool scaleEnabled;
-
-    for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
-        SequencerEngine* eng = alg->channels[ch].engine;
-        int base = alg->channels[ch].paramBase;
-        scaleEnabled = alg->v[base + kChScaleEnable] != 0;
-
-        // Channel number (1-based)
-        NT_intToString(buf, ch + 1);
-        NT_drawText(0, y, buf, 15, kNT_textLeft, kNT_textTiny);
-
-        // Engine name (or "--" for None)
-        if (eng)
-            NT_drawText(7, y, eng->name(), 10, kNT_textLeft, kNT_textTiny);
-        else
-            NT_drawText(7, y, "--", 5, kNT_textLeft, kNT_textTiny);
-
-        // Status text from engine
-        if (eng) {
-            eng->getStatusText(buf, sizeof(buf));
-            NT_drawText(40, y, buf, 8, kNT_textLeft, kNT_textTiny);
-        }
-
-        // Step position bar (simple background + playhead)
-        // Tiny font baseline is y; glyphs span ~y-6 to y.
-        if (eng) {
-            int step = eng->currentStep();
-            int length = eng->sequenceLength();
-            if (length > 0) {
-                NT_drawShapeI(kNT_rectangle, 95, y - 5, 95 + 64 - 1, y - 1, 2);
-                if (step >= 0) {
-                    int px = 95 + (step * 63) / (length > 1 ? length - 1 : 1);
-                    NT_drawShapeI(kNT_rectangle, px, y - 5, px + 1, y - 1, 15);
-                }
-            }
-        }
-
-        // Pitch display
-        formatPitch(buf, alg->channels[ch].cachedPitch, scaleEnabled,
-                    alg->v[kParamRootNote], alg->v[kParamOctave]);
-        NT_drawText(164, y, buf, 12, kNT_textLeft, kNT_textTiny);
-
-        // Gate indicator
-        if (alg->channels[ch].cachedGate > 0.0f) {
-            NT_drawShapeI(kNT_rectangle, 208, y - 5, 213, y - 1, 15);
-        }
-
-        y += 9;
-    }
-}
-
-// --- Focus mode ---
-
-static void drawFocus(NtSeq* alg, int focusCh)
+static void drawEngine(NtSeq* alg)
 {
     char buf[64];
-    SequencerEngine* eng = alg->channels[focusCh].engine;
-    int base = alg->channels[focusCh].paramBase;
-    bool scaleEnabled = alg->v[base + kChScaleEnable] != 0;
+    SequencerEngine* eng = alg->seq.engine;
+    int base = alg->seq.paramBase;
+    bool scaleEnabled = alg->v[base + kRouteScaleEnable] != 0;
 
-    // --- Line 1 (y=0): "Ch N: <Engine>" ---
     int len = 0;
-    const char* s = "Ch "; while (*s) buf[len++] = *s++;
-    len += NT_intToString(buf + len, focusCh + 1);
-    buf[len++] = ':';
-    buf[len++] = ' ';
+    const char* s;
     if (eng) {
         s = eng->name();
         while (*s) buf[len++] = *s++;
@@ -254,9 +160,8 @@ static void drawFocus(NtSeq* alg, int focusCh)
         NT_drawText(255, 7, buf, 8, kNT_textRight, kNT_textTiny);
     }
 
-    // If no engine, just show "No engine selected"
     if (!eng) {
-        NT_drawText(0, 30, "No engine selected", 8, kNT_textLeft, kNT_textTiny);
+        NT_drawText(0, 30, "Engine unavailable", 8, kNT_textLeft, kNT_textTiny);
         return;
     }
 
@@ -284,12 +189,12 @@ static void drawFocus(NtSeq* alg, int focusCh)
     // --- Line 3 (y=20): Note, Gate, Velocity ---
     len = 0;
     s = "Note:"; while (*s) buf[len++] = *s++;
-    len += formatPitch(buf + len, alg->channels[focusCh].cachedPitch, scaleEnabled, rootNote, octave);
+    len += formatPitch(buf + len, alg->seq.cachedPitch, scaleEnabled, rootNote, octave);
     s = "  Gate:"; while (*s) buf[len++] = *s++;
-    s = (alg->channels[focusCh].cachedGate > 0.0f) ? "ON" : "OFF";
+    s = alg->seq.cachedGate > 0.0f ? "ON" : "OFF";
     while (*s) buf[len++] = *s++;
     s = "  Vel:"; while (*s) buf[len++] = *s++;
-    len += NT_floatToString(buf + len, alg->channels[focusCh].cachedVelocity, 1);
+    len += NT_floatToString(buf + len, alg->seq.cachedVelocity, 1);
     buf[len++] = 'V';
     buf[len] = 0;
     NT_drawText(0, 25, buf, 10, kNT_textLeft, kNT_textTiny);
@@ -301,35 +206,6 @@ static void drawFocus(NtSeq* alg, int focusCh)
         drawFocusDetailLines(33, 41, detail);
     }
 
-    // --- Separator line (y=48) ---
-    NT_drawShapeI(kNT_line, 0, 48, 255, 48, 4);
-
-    // --- Other channels summary (y=51) ---
-    int x = 0;
-    for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
-        if ((int)ch == focusCh) continue;
-
-        int chBase = alg->channels[ch].paramBase;
-        bool chScaleEn = alg->v[chBase + kChScaleEnable] != 0;
-
-        len = 0;
-        len += NT_intToString(buf + len, ch + 1);
-        buf[len++] = ':';
-        if (alg->channels[ch].engine) {
-            s = alg->channels[ch].engine->name();
-            while (*s && len < 12) buf[len++] = *s++;
-        } else {
-            s = "--"; while (*s && len < 12) buf[len++] = *s++;
-        }
-        buf[len++] = ' ';
-        len += formatPitch(buf + len, alg->channels[ch].cachedPitch, chScaleEn,
-                           alg->v[kParamRootNote], alg->v[kParamOctave]);
-        buf[len++] = ' ';
-        buf[len++] = (alg->channels[ch].cachedGate > 0.0f) ? 'G' : '.';
-        buf[len] = 0;
-        NT_drawText(x, 56, buf, 7, kNT_textLeft, kNT_textTiny);
-        x += 85;
-    }
 }
 
 // --- Public draw function ---
@@ -338,41 +214,29 @@ bool draw(_NT_algorithm* self)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
 
-    if (alg->focusChannel >= 0 && alg->focusChannel < (int8_t)alg->numChannels)
-        drawFocus(alg, alg->focusChannel);
-    else
-        drawOverview(alg);
+    drawEngine(alg);
 
     return true;
 }
 
-// --- Custom UI: right encoder button cycles focus ---
-
 uint32_t hasCustomUi(_NT_algorithm* self)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
-
-    uint32_t controls = kNT_encoderButtonR | kNT_potButtonC;
-    int focus = alg->focusChannel;
-    if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineThorp) {
-        controls |= kNT_encoderL | kNT_encoderR | kNT_encoderButtonL;
-        controls |= kNT_potL | kNT_potC | kNT_potR;
-        controls |= kNT_potButtonL | kNT_potButtonR;
-    } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineAeSeq) {
-        controls |= kNT_encoderL | kNT_encoderR;
-        controls |= kNT_potL | kNT_potC | kNT_potR;
-    } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineSoma) {
-        controls |= kNT_encoderL | kNT_encoderR;
-        controls |= kNT_potL | kNT_potC | kNT_potR;
-    } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineSeqMarkov) {
-        controls |= kNT_encoderL | kNT_encoderR;
-        controls |= kNT_potL | kNT_potC | kNT_potR;
-        controls |= kNT_potButtonL | kNT_potButtonR;
-    } else if (focus >= 0 && focus < (int)alg->numChannels && alg->channels[focus].engineType == kEngineFerro) {
-        controls |= kNT_encoderL | kNT_encoderR;
-        controls |= kNT_potL | kNT_potC | kNT_potR;
+    switch (alg->seq.engineType) {
+    case kEngineThorp:
+        return kNT_encoderL | kNT_encoderR | kNT_encoderButtonL
+            | kNT_potL | kNT_potC | kNT_potR | kNT_potButtonL | kNT_potButtonR;
+    case kEngineSeqMarkov:
+        return kNT_encoderL | kNT_encoderR
+            | kNT_potL | kNT_potC | kNT_potR | kNT_potButtonL | kNT_potButtonR;
+    case kEngineAeSeq:
+    case kEngineSoma:
+    case kEngineFerro:
+    case kEngineQuantum:
+        return kNT_encoderL | kNT_encoderR | kNT_potL | kNT_potC | kNT_potR;
+    default:
+        return 0;
     }
-    return controls;
 }
 
 void customUi(_NT_algorithm* self, const _NT_uiData& data)
@@ -382,40 +246,10 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
     if (algIdx < 0)
         return;
     uint32_t paramOffset = NT_parameterOffset();
+    SequencerState& seq = alg->seq;
 
-    int focus = alg->focusChannel;
-    bool markovFocus = (focus >= 0 && focus < (int)alg->numChannels &&
-        alg->channels[focus].engineType == kEngineSeqMarkov);
-
-    // Rising edge on right encoder button: cycle focus except while using it
-    // as Markov's force-regenerate control.
-    if (!markovFocus &&
-        (data.controls & kNT_encoderButtonR) &&
-        !(data.lastButtons & kNT_encoderButtonR)) {
-        // Cycle: -1 -> 0 -> 1 -> ... -> (numChannels-1) -> -1
-        alg->focusChannel++;
-        if (alg->focusChannel >= (int8_t)alg->numChannels) {
-            alg->focusChannel = -1;
-        }
-        return;
-    }
-
-    // Pot center button cycles focus (works in all engine focuses).
-    if ((data.controls & kNT_potButtonC) && !(data.lastButtons & kNT_potButtonC)) {
-        alg->focusChannel++;
-        if (alg->focusChannel >= (int8_t)alg->numChannels) {
-            alg->focusChannel = -1;
-        }
-        return;
-    }
-
-    focus = alg->focusChannel;
-    if (focus < 0 || focus >= (int)alg->numChannels)
-        return;
-
-    // AE focus controls
-    if (alg->channels[focus].engineType == kEngineAeSeq && alg->channels[focus].engine) {
-        int engBase = alg->channels[focus].engineParamBase;
+    if (seq.engineType == kEngineAeSeq && seq.engine) {
+        int engBase = seq.engineParamBase;
 
         if (data.encoders[0] != 0) {
             int v = alg->v[engBase + AeSequencerEngine::kAeCvSeq] + data.encoders[0];
@@ -451,9 +285,8 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
-    // Soma focus controls
-    if (alg->channels[focus].engineType == kEngineSoma && alg->channels[focus].engine) {
-        int engBase = alg->channels[focus].engineParamBase;
+    if (seq.engineType == kEngineSoma && seq.engine) {
+        int engBase = seq.engineParamBase;
 
         if (data.controls & kNT_potL) {
             int v = (int)(data.pots[0] * 100.0f + 0.5f);
@@ -488,10 +321,9 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
-    // Markov focus controls
-    if (alg->channels[focus].engineType == kEngineSeqMarkov && alg->channels[focus].engine) {
-        SeqMarkovEngine* mk = static_cast<SeqMarkovEngine*>(alg->channels[focus].engine);
-        int engBase = alg->channels[focus].engineParamBase;
+    if (seq.engineType == kEngineSeqMarkov && seq.engine) {
+        SeqMarkovEngine* mk = static_cast<SeqMarkovEngine*>(seq.engine);
+        int engBase = seq.engineParamBase;
 
         // Encoder L: Style (wrapping 0-7)
         if (data.encoders[0] != 0) {
@@ -543,9 +375,8 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
-    // Ferro focus controls
-    if (alg->channels[focus].engineType == kEngineFerro && alg->channels[focus].engine) {
-        int engBase = alg->channels[focus].engineParamBase;
+    if (seq.engineType == kEngineFerro && seq.engine) {
+        int engBase = seq.engineParamBase;
 
         // Encoder L: Loop Steps (2-128)
         if (data.encoders[0] != 0) {
@@ -585,11 +416,69 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
         return;
     }
 
-    // Thorp focus controls
-    if (alg->channels[focus].engineType != kEngineThorp || !alg->channels[focus].engine)
+    if (seq.engineType == kEngineQuantum && seq.engine) {
+        int engBase = seq.engineParamBase;
+
+        if (data.encoders[0] != 0) {
+            int value = alg->v[engBase + QuantumEngine::kQContour] + data.encoders[0];
+            while (value < 0)
+                value += QuantumEngine::kNumContours;
+            while (value >= QuantumEngine::kNumContours)
+                value -= QuantumEngine::kNumContours;
+            NT_setParameterFromUi(
+                static_cast<uint32_t>(algIdx),
+                static_cast<uint32_t>(engBase + QuantumEngine::kQContour) + paramOffset,
+                static_cast<int16_t>(value));
+        }
+
+        if (data.encoders[1] != 0) {
+            int value = alg->v[engBase + QuantumEngine::kQRange] + data.encoders[1];
+            if (value < 2)
+                value = 2;
+            if (value > 12)
+                value = 12;
+            NT_setParameterFromUi(
+                static_cast<uint32_t>(algIdx),
+                static_cast<uint32_t>(engBase + QuantumEngine::kQRange) + paramOffset,
+                static_cast<int16_t>(value));
+        }
+
+        if (data.controls & kNT_potL) {
+            int value = 4 + static_cast<int>(data.pots[0] * 12.999f);
+            if (value > 16)
+                value = 16;
+            NT_setParameterFromUi(
+                static_cast<uint32_t>(algIdx),
+                static_cast<uint32_t>(engBase + QuantumEngine::kQMotifLen) + paramOffset,
+                static_cast<int16_t>(value));
+        }
+
+        if (data.controls & kNT_potC) {
+            int value = static_cast<int>(data.pots[1] * QuantumEngine::kNumMTransforms);
+            if (value >= QuantumEngine::kNumMTransforms)
+                value = QuantumEngine::kNumMTransforms - 1;
+            NT_setParameterFromUi(
+                static_cast<uint32_t>(algIdx),
+                static_cast<uint32_t>(engBase + QuantumEngine::kQMTransform) + paramOffset,
+                static_cast<int16_t>(value));
+        }
+
+        if (data.controls & kNT_potR) {
+            int value = 25 + static_cast<int>(data.pots[2] * 75.0f + 0.5f);
+            if (value > 100)
+                value = 100;
+            NT_setParameterFromUi(
+                static_cast<uint32_t>(algIdx),
+                static_cast<uint32_t>(engBase + QuantumEngine::kQGateDensity) + paramOffset,
+                static_cast<int16_t>(value));
+        }
+        return;
+    }
+
+    if (seq.engineType != kEngineThorp || !seq.engine)
         return;
 
-    int engBase = alg->channels[focus].engineParamBase;
+    int engBase = seq.engineParamBase;
 
     // Encoder L turn: select arp slot (wraps 1-16, also writes to chain)
     if (data.encoders[0] != 0) {
