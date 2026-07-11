@@ -5,7 +5,6 @@
 #include "engines/SeqMarkovEngine.h"
 #include "engines/FerromagneticEngine.h"
 #include "engines/QuantumEngine.h"
-#include <new>
 #include <string.h>
 
 // Root note names for parameterString
@@ -40,20 +39,6 @@ static const char* engineName(EngineType type)
     case kEngineFerro:     return "Ferro";
     case kEngineQuantum:   return "Quantum";
     default:               return "";
-    }
-}
-
-// Helper to create engine instance via placement new
-static SequencerEngine* createEngine(EngineType type, uint8_t* mem)
-{
-    switch (type) {
-    case kEngineThorp:     return new (mem) ThorpEngine();
-    case kEngineSoma:      return new (mem) SomaEngine();
-    case kEngineAeSeq:     return new (mem) AeSequencerEngine();
-    case kEngineSeqMarkov: return new (mem) SeqMarkovEngine();
-    case kEngineFerro:     return new (mem) FerromagneticEngine();
-    case kEngineQuantum:   return new (mem) QuantumEngine();
-    default:               return nullptr;
     }
 }
 
@@ -102,7 +87,7 @@ static void switchChannelEngine(NtSeq* alg, int algIdx, int ch, int newTypeWithN
     // Create new engine (or leave nullptr for None)
     if (newType != kEngineNone) {
         uint8_t* engineMem = alg->enginePool + ch * 2048;
-        alg->channels[ch].engine = createEngine(newType, engineMem);
+        alg->channels[ch].engine = createEngineInstance(newType, engineMem);
         if (alg->channels[ch].engine)
             alg->channels[ch].engine->init(alg->sampleRate);
     }
@@ -197,20 +182,22 @@ void parameterChanged(_NT_algorithm* self, int p)
         return;
     }
 
-    // Engine Type params: indices kNumGlobalParams .. kNumGlobalParams + numChannels - 1
-    int engineTypeFirst = kNumGlobalParams;
-    int engineTypeLast = kNumGlobalParams + (int)alg->numChannels;
-    if (p >= engineTypeFirst && p < engineTypeLast) {
-        int ch = p - engineTypeFirst;
-        switchChannelEngine(alg, algIdx, ch, alg->v[p]);
-        return;
+    // Engine Type params exist only on the legacy runtime-selectable factory.
+    if (!alg->fixedEngine) {
+        int engineTypeFirst = alg->engineTypeParamBase;
+        int engineTypeLast = engineTypeFirst + (int)alg->numChannels;
+        if (p >= engineTypeFirst && p < engineTypeLast) {
+            int ch = p - engineTypeFirst;
+            switchChannelEngine(alg, algIdx, ch, alg->v[p]);
+            return;
+        }
     }
 
     // Check per-channel parameters
     for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
         int base = alg->channels[ch].paramBase;
         int engBase = alg->channels[ch].engineParamBase;
-        int engEnd = engBase + kMaxEngineParams;
+        int engEnd = alg->channels[ch].paramEnd;
 
         // Is this param in this channel's range?
         if (p < base || p >= engEnd) continue;
@@ -285,24 +272,23 @@ int parameterUiPrefix(_NT_algorithm* self, int p, char* buff)
     if (p < kNumGlobalParams)
         return 0;
 
-    int numCh = (int)alg->numChannels;
-
-    // Engine Type params: indices kNumGlobalParams..kNumGlobalParams+numChannels-1
-    int engineTypeFirst = kNumGlobalParams;
-    int engineTypeLast = engineTypeFirst + numCh;
-    if (p >= engineTypeFirst && p < engineTypeLast) {
-        int ch = p - engineTypeFirst;
-        int len = NT_intToString(buff, ch + 1);
-        buff[len++] = ':';
-        buff[len] = 0;
-        return len;
+    // Engine Type params exist only on the legacy runtime-selectable factory.
+    if (!alg->fixedEngine) {
+        int engineTypeFirst = alg->engineTypeParamBase;
+        int engineTypeLast = engineTypeFirst + (int)alg->numChannels;
+        if (p >= engineTypeFirst && p < engineTypeLast) {
+            int ch = p - engineTypeFirst;
+            int len = NT_intToString(buff, ch + 1);
+            buff[len++] = ':';
+            buff[len] = 0;
+            return len;
+        }
     }
 
-    // Per-channel common + engine params: prefix with "N:"
-    int perChannelStart = engineTypeLast;
-    if (p >= perChannelStart) {
-        int ch = (p - perChannelStart) / kParamsPerChannel;
-        if (ch < numCh) {
+    // Per-channel layouts vary by dedicated engine, so use the explicit
+    // channel bounds rather than assuming the legacy fixed stride.
+    for (uint32_t ch = 0; ch < alg->numChannels; ++ch) {
+        if (p >= alg->channels[ch].paramBase && p < alg->channels[ch].paramEnd) {
             int len = NT_intToString(buff, ch + 1);
             buff[len++] = ':';
             buff[len] = 0;

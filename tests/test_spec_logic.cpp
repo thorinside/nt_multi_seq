@@ -36,8 +36,9 @@ static void test_specEngineName()
     ASSERT_STR_EQ(specEngineName(2), "AE Seq", "engine 2 -> AE Seq");
     ASSERT_STR_EQ(specEngineName(3), "Markov", "engine 3 -> Markov");
     ASSERT_STR_EQ(specEngineName(4), "Ferro", "engine 4 -> Ferro");
+    ASSERT_STR_EQ(specEngineName(5), "Quantum", "engine 5 -> Quantum");
     ASSERT_STR_EQ(specEngineName(-1), "?", "engine -1 -> ?");
-    ASSERT_STR_EQ(specEngineName(5), "?", "engine 5 -> ?");
+    ASSERT_STR_EQ(specEngineName(6), "?", "engine 6 -> ?");
 }
 
 // --- Test: specStrCopy ---
@@ -183,6 +184,14 @@ static void test_paramLayout()
     // Second channel's common base: 9 + 47 = 56
     int secondCommon = firstCommon + paramsPerCh;
     ASSERT_EQ(secondCommon, 56, "ch1 common base (4ch) = 56");
+
+    // Dedicated factories omit the engine selector and unused engine slots.
+    int thorpParams = 15;
+    int dedicated1 = numGlobal + numCommon + thorpParams;
+    ASSERT_EQ(dedicated1, 35, "1 channel dedicated Thorp total = 35");
+
+    int dedicated4 = numGlobal + 4 * (numCommon + thorpParams);
+    ASSERT_EQ(dedicated4, 125, "4 channel dedicated Thorp total = 125");
 }
 
 int main()

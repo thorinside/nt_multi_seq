@@ -136,6 +136,7 @@ struct ChannelState {
     int paramBase;           // Index of first per-channel common param in v[]
     int engineParamBase;     // Index of first engine param in v[]
     int numEngineParams;     // Actual number of engine params (no padding)
+    int paramEnd;            // One past the last parameter owned by this channel
     int enginePageIndex;     // Index into pageDefs[] for engine page
 
     // Per-channel clock/reset edge detection
@@ -159,6 +160,7 @@ struct ChannelState {
         , paramBase(0)
         , engineParamBase(0)
         , numEngineParams(0)
+        , paramEnd(0)
         , enginePageIndex(0)
         , clockHigh(false)
         , resetHigh(false)
@@ -179,6 +181,8 @@ struct NtSeq : public _NT_algorithm {
 
     uint32_t numChannels;
     uint32_t sampleRate;
+    bool fixedEngine;
+    int engineTypeParamBase;
 
     // Parameter storage (mutable copy for dynamic updates)
     _NT_parameter paramDefs[kMaxTotalParams];
@@ -223,5 +227,19 @@ struct NtSeq : public _NT_algorithm {
     // Each slot is 2048 bytes; 2048 is a multiple of 8, so all slots stay aligned.
     alignas(8) uint8_t enginePool[kMaxChannels * 2048];
 };
+
+// Factory-specific construction helpers. Passing kEngineNone preserves the
+// legacy runtime-selectable multi-engine algorithm; a concrete engine type
+// creates a dedicated algorithm with no Engine selector parameters.
+void calculateRequirementsForEngine(
+    _NT_algorithmRequirements& req,
+    const int32_t* specifications,
+    EngineType fixedEngineType);
+_NT_algorithm* constructForEngine(
+    const _NT_algorithmMemoryPtrs& ptrs,
+    const _NT_algorithmRequirements& req,
+    const int32_t* specifications,
+    EngineType fixedEngineType);
+SequencerEngine* createEngineInstance(EngineType type, uint8_t* mem);
 
 #endif // NT_SEQ_H

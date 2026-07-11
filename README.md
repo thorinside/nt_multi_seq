@@ -1,8 +1,8 @@
 # nt_multi_seq
 
-A multi-channel sequencer plugin for the [Expert Sleepers disting NT](https://expert-sleepers.co.uk/distingNT.html) Eurorack module.
+A collection of multi-channel sequencer algorithms for the [Expert Sleepers disting NT](https://expert-sleepers.co.uk/distingNT.html) Eurorack module.
 
-Each channel runs an independent sequencer engine, selected at runtime via a per-channel Engine Type parameter. The number of channels (1-8) is set at instantiation time. Channels share a global scale/tuning system using `.scl` microtuning files.
+The single `nt_seq.o` binary exposes a dedicated algorithm for each sequencer engine, plus the original `nt_multi_seq` algorithm for preset compatibility. The number of channels (1-4) is set at instantiation time. Channels share a global scale/tuning system using `.scl` microtuning files.
 
 ## Engines
 
@@ -13,6 +13,24 @@ Each channel runs an independent sequencer engine, selected at runtime via a per
 | Soma | [Soma](docs/soma.md) | Mutating step sequencer with note and gate mutation probabilities |
 | AE Seq | [AE Seq](docs/ae-seq.md) | Analog-style CV/gate sequencer with independent CV and gate sequence selection, bit depth control |
 | Markov | [Markov](docs/markov.md) | Markov chain melodic generator with 8 behavioral styles and semantic matrix generation |
+| Ferro | [Ferromagnetic](docs/ferromagnetic.md) | Tape-loop chord builder with layered melody, loop trigger, and record gate roles |
+| Quantum | Quantum | Hierarchical generative sequencer with motif-, transformation-, and large-form cycles |
+
+## Algorithm Entries
+
+The plugin follows the disting NT multi-factory pattern used by the official SDK and community plugins such as NerdRoger's Directional Sequencer. Loading `nt_seq.o` makes these entries available in the algorithm browser:
+
+| Algorithm | GUID | Engine selection |
+|-----------|------|------------------|
+| `nt_multi_seq` | `ThMs` | Runtime-selectable per channel; retained for existing presets |
+| `Thorp` | `NsTh` | Fixed Thorp engine |
+| `Soma` | `NsSo` | Fixed Soma engine |
+| `AE Seq` | `NsAe` | Fixed AE Seq engine |
+| `Markov` | `NsMk` | Fixed Markov engine |
+| `Ferro` | `NsFe` | Fixed Ferro engine |
+| `Quantum` | `NsQu` | Fixed Quantum engine |
+
+Dedicated entries omit the Engine selector page and reserve only the selected engine's actual parameter slots. The legacy entry keeps its released GUID and parameter layout so existing presets continue to load.
 
 ## Display and Focus UI
 
@@ -79,10 +97,12 @@ Every channel has these common parameters regardless of engine type:
 
 ## Architecture
 
-- **Single "Channels" spec**: The only specification is the number of channels (1-8), set at instantiation. All memory is allocated for the maximum engine size per channel.
-- **Runtime engine switching**: Each channel has an Engine Type parameter (None/Thorp/Soma/AE Seq/Markov) that can be changed at any time. Switching destroys the old engine and constructs the new one via placement new.
-- **Fixed parameter layout**: Global(5) + Engine Type per channel(N) + (Common(15) + Engine Slots(32)) per channel(N). Unused engine slots are greyed out with placeholder names.
-- **Dynamic page naming**: Pages are named "Ch N Routing" and "Ch N \<Engine\>" (updated live when the engine type changes).
+- **Multiple factories, one binary**: `pluginEntry()` exposes seven algorithm factories from `nt_seq.o`, keeping shared routing, scale, clock, MIDI, and UI code centralized.
+- **Single "Channels" spec**: Every factory specifies 1-4 channels at instantiation.
+- **Dedicated factories**: Each channel is constructed with the factory's fixed engine and receives only that engine's parameter definitions.
+- **Legacy runtime switching**: `nt_multi_seq` retains the per-channel Engine parameter and 32 engine slots. Switching destroys the old engine and constructs the new one via placement new.
+- **Stable legacy layout**: The original layout remains Global(5) + Engine Type per channel(N) + (Common(15) + Engine Slots(32)) per channel(N).
+- **Dynamic page naming**: Pages are named "Ch N Routing" and "Ch N \<Engine\>"; the legacy entry updates names when its engine type changes.
 - **Shared scale system**: All channels share a global root note, octave, and `.scl` scale file. Per-channel "Scale On" toggles whether quantization is applied.
 
 ## Per-Channel Routing
@@ -128,6 +148,8 @@ engines/
   SomaEngine.cpp/h        Mutating step sequencer
   AeSequencerEngine.cpp/h Analog-style CV/gate sequencer
   SeqMarkovEngine.cpp/h   Markov chain melodic generator
+  FerromagneticEngine.cpp/h Tape-loop chord sequencer
+  QuantumEngine.cpp/h     Hierarchical generative sequencer
 scale/
   ScaleQuantizer.cpp/h    .scl microtuning support
 clock/

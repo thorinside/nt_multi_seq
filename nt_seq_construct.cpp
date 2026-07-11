@@ -4,6 +4,7 @@
 #include "engines/SeqMarkovEngine.h"
 #include "engines/ThorpEngine.h"
 #include "engines/FerromagneticEngine.h"
+#include "engines/QuantumEngine.h"
 #include <new>
 #include <string.h>
 
@@ -14,16 +15,19 @@ static_assert(sizeof(AeSequencerEngine) <= 2048, "AeSequencerEngine exceeds pool
 static_assert(sizeof(SeqMarkovEngine) <= 2048, "SeqMarkovEngine exceeds pool slot");
 static_assert(sizeof(ThorpEngine) <= 2048, "ThorpEngine exceeds pool slot");
 static_assert(sizeof(FerromagneticEngine) <= 2048, "FerromagneticEngine exceeds pool slot");
+static_assert(sizeof(QuantumEngine) <= 2048, "QuantumEngine exceeds pool slot");
 static_assert(alignof(SomaEngine) <= 8, "SomaEngine alignment exceeds pool");
 static_assert(alignof(AeSequencerEngine) <= 8, "AeSequencerEngine alignment exceeds pool");
 static_assert(alignof(SeqMarkovEngine) <= 8, "SeqMarkovEngine alignment exceeds pool");
 static_assert(alignof(ThorpEngine) <= 8, "ThorpEngine alignment exceeds pool");
 static_assert(alignof(FerromagneticEngine) <= 8, "FerromagneticEngine alignment exceeds pool");
+static_assert(alignof(QuantumEngine) <= 8, "QuantumEngine alignment exceeds pool");
 static_assert(SomaEngine::kNumSomaParams <= kMaxEngineParams, "SomaEngine has too many params");
 static_assert(AeSequencerEngine::kNumAeParams <= kMaxEngineParams, "AeSequencerEngine has too many params");
 static_assert(SeqMarkovEngine::kNumMarkovParams <= kMaxEngineParams, "SeqMarkovEngine has too many params");
 static_assert(ThorpEngine::kNumThorpParams <= kMaxEngineParams, "ThorpEngine has too many params");
 static_assert(FerromagneticEngine::kNumFerroParams <= kMaxEngineParams, "FerromagneticEngine has too many params");
+static_assert(QuantumEngine::kNumQuantumParams <= kMaxEngineParams, "QuantumEngine has too many params");
 static_assert(ARRAY_SIZE(specifications) == NUM_SPECS, "specifications array must match NUM_SPECS");
 
 // Per-channel common parameters (static definitions as templates)
@@ -83,6 +87,32 @@ static void sclCallback(void* callbackData)
     pThis->scaleDirty = true;
 }
 
+static int engineParameterCount(EngineType type)
+{
+    switch (type) {
+    case kEngineThorp:     return ThorpEngine::kNumThorpParams;
+    case kEngineSoma:      return SomaEngine::kNumSomaParams;
+    case kEngineAeSeq:     return AeSequencerEngine::kNumAeParams;
+    case kEngineSeqMarkov: return SeqMarkovEngine::kNumMarkovParams;
+    case kEngineFerro:     return FerromagneticEngine::kNumFerroParams;
+    case kEngineQuantum:   return QuantumEngine::kNumQuantumParams;
+    default:               return kMaxEngineParams;
+    }
+}
+
+SequencerEngine* createEngineInstance(EngineType type, uint8_t* mem)
+{
+    switch (type) {
+    case kEngineThorp:     return new (mem) ThorpEngine();
+    case kEngineSoma:      return new (mem) SomaEngine();
+    case kEngineAeSeq:     return new (mem) AeSequencerEngine();
+    case kEngineSeqMarkov: return new (mem) SeqMarkovEngine();
+    case kEngineFerro:     return new (mem) FerromagneticEngine();
+    case kEngineQuantum:   return new (mem) QuantumEngine();
+    default:               return nullptr;
+    }
+}
+
 // Copy string, return chars written (no null terminator added)
 static int strCopy(char* dst, const char* src, int maxLen)
 {
@@ -96,12 +126,28 @@ static int strCopy(char* dst, const char* src, int maxLen)
 
 void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specifications)
 {
+    calculateRequirementsForEngine(req, specifications, kEngineNone);
+}
+
+void calculateRequirementsForEngine(
+    _NT_algorithmRequirements& req,
+    const int32_t* specifications,
+    EngineType fixedEngineType)
+{
     int numChannels = specifications[SPEC_CHANNELS];
     if (numChannels < 1) numChannels = 1;
     if (numChannels > kMaxChannels) numChannels = kMaxChannels;
 
-    // Global + engine-type-per-channel + per-channel(common + engine slots)
-    int totalParams = kNumGlobalParams + numChannels + numChannels * kParamsPerChannel;
+    const bool fixedEngine = fixedEngineType != kEngineNone;
+    const int engineParams = fixedEngine
+        ? engineParameterCount(fixedEngineType)
+        : kMaxEngineParams;
+
+    // Dedicated factories omit the per-channel Engine selector and reserve
+    // only the selected engine's actual parameter count.
+    int totalParams = kNumGlobalParams
+        + (fixedEngine ? 0 : numChannels)
+        + numChannels * (kNumChannelCommonParams + engineParams);
 
     req.numParameters = totalParams;
     req.sram = sizeof(NtSeq);
@@ -112,6 +158,15 @@ void calculateRequirements(_NT_algorithmRequirements& req, const int32_t* specif
 
 _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorithmRequirements& req, const int32_t* specifications)
 {
+    return constructForEngine(ptrs, req, specifications, kEngineNone);
+}
+
+_NT_algorithm* constructForEngine(
+    const _NT_algorithmMemoryPtrs& ptrs,
+    const _NT_algorithmRequirements& req,
+    const int32_t* specifications,
+    EngineType fixedEngineType)
+{
     int numChannels = specifications[SPEC_CHANNELS];
     if (numChannels < 1) numChannels = 1;
     if (numChannels > kMaxChannels) numChannels = kMaxChannels;
@@ -119,6 +174,8 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     NtSeq* alg = new (ptrs.sram) NtSeq();
     alg->numChannels = numChannels;
     alg->sampleRate = NT_globals.sampleRate;
+    alg->fixedEngine = fixedEngineType != kEngineNone;
+    alg->engineTypeParamBase = -1;
     alg->cardMounted = false;
     alg->awaitingCallback = false;
     alg->scaleDirty = false;
@@ -135,14 +192,18 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     memcpy(&alg->paramDefs[p], globalParams, sizeof(globalParams));
     p += kNumGlobalParams;
 
-    // Engine Type params (one per channel) — these go on the "Engines" page
-    int engineTypeBase = p;
-    for (int ch = 0; ch < numChannels; ++ch) {
-        alg->paramDefs[p] = engineTypeParam;
-        p++;
+    // The legacy factory has one runtime Engine selector per channel. A
+    // dedicated factory has its engine type fixed by the factory instead.
+    if (!alg->fixedEngine) {
+        alg->engineTypeParamBase = p;
+        for (int ch = 0; ch < numChannels; ++ch) {
+            alg->paramDefs[p] = engineTypeParam;
+            p++;
+        }
     }
 
-    // Per-channel params: 15 common + 32 engine slots
+    // Per-channel params: common routing followed by either 32 switchable
+    // slots (legacy factory) or the dedicated engine's exact parameter count.
     for (int ch = 0; ch < numChannels; ++ch) {
         alg->channels[ch].paramBase = p;
 
@@ -157,15 +218,33 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
 
         p += kNumChannelCommonParams;
 
-        // Engine param slots — all placeholders (greyed out for None)
+        // Engine parameters. Dedicated factories create their engines during
+        // construction; the legacy factory starts with empty placeholders.
         alg->channels[ch].engineParamBase = p;
-        alg->channels[ch].numEngineParams = kMaxEngineParams;
-        alg->channels[ch].engineType = kEngineNone;
+        alg->channels[ch].engineType = alg->fixedEngine ? fixedEngineType : kEngineNone;
         alg->channels[ch].engine = nullptr;
 
-        for (int i = 0; i < kMaxEngineParams; ++i)
-            alg->paramDefs[p + i] = placeholderParam;
-        p += kMaxEngineParams;
+        if (alg->fixedEngine) {
+            uint8_t* engineMem = alg->enginePool + ch * 2048;
+            alg->channels[ch].engine = createEngineInstance(fixedEngineType, engineMem);
+            if (alg->channels[ch].engine)
+                alg->channels[ch].engine->init(alg->sampleRate);
+
+            _NT_parameter engineDefs[kMaxEngineParams];
+            int numEngineDefs = alg->channels[ch].engine
+                ? alg->channels[ch].engine->getParameterDefs(engineDefs)
+                : 0;
+            alg->channels[ch].numEngineParams = numEngineDefs;
+            for (int i = 0; i < numEngineDefs; ++i)
+                alg->paramDefs[p + i] = engineDefs[i];
+            p += numEngineDefs;
+        } else {
+            alg->channels[ch].numEngineParams = 0;
+            for (int i = 0; i < kMaxEngineParams; ++i)
+                alg->paramDefs[p + i] = placeholderParam;
+            p += kMaxEngineParams;
+        }
+        alg->channels[ch].paramEnd = p;
 
         // Initialize clock processor
         alg->channels[ch].clockProc.setDivider(1);
@@ -176,6 +255,9 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
         alg->channels[ch].gateSamplesRemaining = 0;
         alg->channels[ch].lastMidiNote = 0;
         alg->channels[ch].midiNoteOn = false;
+
+        if (alg->channels[ch].engine)
+            alg->channels[ch].engine->setWeightMode(globalParams[kParamNoteWeight].def);
     }
 
     alg->numParams = p;
@@ -198,11 +280,11 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     idxOffset += kNumGlobalParams;
     pageIdx++;
 
-    // Page: Engines (one Engine Type param per channel)
-    {
+    // Page: Engines (legacy runtime-selectable factory only)
+    if (!alg->fixedEngine) {
         uint8_t* enginesPageIdx = &alg->pageIndices[idxOffset];
         for (int ch = 0; ch < numChannels; ++ch)
-            enginesPageIdx[ch] = (uint8_t)(engineTypeBase + ch);
+            enginesPageIdx[ch] = (uint8_t)(alg->engineTypeParamBase + ch);
         alg->pageDefs[pageIdx] = {
             .name = "Engines",
             .numParams = (uint8_t)numChannels,
@@ -228,6 +310,12 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
             char* buf = alg->pageNameBufs[nameBufBase + 1];
             int len = strCopy(buf, "Ch ", 3);
             len += NT_intToString(buf + len, ch + 1);
+            if (alg->fixedEngine) {
+                buf[len++] = ' ';
+                len += strCopy(buf + len,
+                    alg->channels[ch].engine ? alg->channels[ch].engine->name() : "",
+                    23 - len);
+            }
             buf[len] = 0;
         }
     }
@@ -251,17 +339,22 @@ _NT_algorithm* construct(const _NT_algorithmMemoryPtrs& ptrs, const _NT_algorith
     // Then all engine pages
     for (int ch = 0; ch < numChannels; ++ch) {
         uint8_t* engPageIdx = &alg->pageIndices[idxOffset];
-        for (int i = 0; i < kMaxEngineParams; ++i)
+        int numPageParams = alg->fixedEngine
+            ? alg->channels[ch].numEngineParams
+            : kMaxEngineParams;
+        for (int i = 0; i < numPageParams; ++i)
             engPageIdx[i] = (uint8_t)(alg->channels[ch].engineParamBase + i);
         alg->pageDefs[pageIdx] = {
             .name = alg->pageNameBufs[ch * 2 + 1],
-            .numParams = 0,
+            .numParams = (uint8_t)(alg->fixedEngine
+                ? alg->channels[ch].numEngineParams
+                : 0),
             .group = kPageGroupEngine,
             .unused = {0, 0},
             .params = engPageIdx
         };
         alg->channels[ch].enginePageIndex = pageIdx;
-        idxOffset += kMaxEngineParams;
+        idxOffset += numPageParams;
         pageIdx++;
     }
 

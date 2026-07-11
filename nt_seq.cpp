@@ -21,6 +21,23 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data);
 int parameterUiPrefix(_NT_algorithm* self, int p, char* buff);
 int parameterString(_NT_algorithm* self, int p, int v, char* buff);
 
+template<EngineType Type>
+static void calculateDedicatedRequirements(
+    _NT_algorithmRequirements& req,
+    const int32_t* specifications)
+{
+    calculateRequirementsForEngine(req, specifications, Type);
+}
+
+template<EngineType Type>
+static _NT_algorithm* constructDedicated(
+    const _NT_algorithmMemoryPtrs& ptrs,
+    const _NT_algorithmRequirements& req,
+    const int32_t* specifications)
+{
+    return constructForEngine(ptrs, req, specifications, Type);
+}
+
 void serialise(_NT_algorithm* self, _NT_jsonStream& stream)
 {
     NtSeq* alg = static_cast<NtSeq*>(self);
@@ -65,7 +82,7 @@ bool deserialise(_NT_algorithm* self, _NT_jsonParse& parse)
     return true;
 }
 
-static const _NT_factory factory = {
+static const _NT_factory legacyFactory = {
     .guid = NT_MULTICHAR('T', 'h', 'M', 's'),
     .name = "nt_multi_seq",
     .description = "Multi-channel sequencer with runtime engine selection",
@@ -91,15 +108,73 @@ static const _NT_factory factory = {
     .parameterString = parameterString,
 };
 
+#define DEDICATED_FACTORY(variableName, factoryGuid, factoryName, factoryDescription, engineType) \
+    static const _NT_factory variableName = { \
+        .guid = factoryGuid, \
+        .name = factoryName, \
+        .description = factoryDescription, \
+        .numSpecifications = ARRAY_SIZE(specifications), \
+        .specifications = specifications, \
+        .calculateStaticRequirements = nullptr, \
+        .initialise = nullptr, \
+        .calculateRequirements = calculateDedicatedRequirements<engineType>, \
+        .construct = constructDedicated<engineType>, \
+        .parameterChanged = parameterChanged, \
+        .step = step, \
+        .draw = draw, \
+        .midiRealtime = nullptr, \
+        .midiMessage = midiMessage, \
+        .tags = kNT_tagInstrument, \
+        .hasCustomUi = hasCustomUi, \
+        .customUi = customUi, \
+        .setupUi = nullptr, \
+        .serialise = serialise, \
+        .deserialise = deserialise, \
+        .midiSysEx = nullptr, \
+        .parameterUiPrefix = parameterUiPrefix, \
+        .parameterString = parameterString, \
+    }
+
+DEDICATED_FACTORY(thorpFactory,
+    NT_MULTICHAR('N', 's', 'T', 'h'),
+    "Thorp", "Pattern arpeggiator and chain sequencer", kEngineThorp);
+DEDICATED_FACTORY(somaFactory,
+    NT_MULTICHAR('N', 's', 'S', 'o'),
+    "Soma", "Mutating probability sequencer", kEngineSoma);
+DEDICATED_FACTORY(aeSeqFactory,
+    NT_MULTICHAR('N', 's', 'A', 'e'),
+    "AE Seq", "Analog-style CV and gate sequencer", kEngineAeSeq);
+DEDICATED_FACTORY(markovFactory,
+    NT_MULTICHAR('N', 's', 'M', 'k'),
+    "Markov", "Markov-chain melodic sequencer", kEngineSeqMarkov);
+DEDICATED_FACTORY(ferroFactory,
+    NT_MULTICHAR('N', 's', 'F', 'e'),
+    "Ferro", "Ferromagnetic tape-loop chord sequencer", kEngineFerro);
+DEDICATED_FACTORY(quantumFactory,
+    NT_MULTICHAR('N', 's', 'Q', 'u'),
+    "Quantum", "Hierarchical generative sequencer", kEngineQuantum);
+
+#undef DEDICATED_FACTORY
+
+static const _NT_factory* const factories[] = {
+    &legacyFactory,
+    &thorpFactory,
+    &somaFactory,
+    &aeSeqFactory,
+    &markovFactory,
+    &ferroFactory,
+    &quantumFactory,
+};
+
 extern "C" uintptr_t pluginEntry(_NT_selector selector, uint32_t data)
 {
     switch (selector) {
     case kNT_selector_version:
         return kNT_apiVersionCurrent;
     case kNT_selector_numFactories:
-        return 1;
+        return ARRAY_SIZE(factories);
     case kNT_selector_factoryInfo:
-        return (data == 0) ? (uintptr_t)&factory : 0;
+        return data < ARRAY_SIZE(factories) ? (uintptr_t)factories[data] : 0;
     }
     return 0;
 }

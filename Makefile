@@ -128,7 +128,8 @@ UNIT_TESTS = \
 	$(BUILD_DIR)/test_ae_engine \
 	$(BUILD_DIR)/test_markov_engine \
 	$(BUILD_DIR)/test_ferro_engine \
-	$(BUILD_DIR)/test_quantum_engine
+	$(BUILD_DIR)/test_quantum_engine \
+	$(BUILD_DIR)/test_factories
 
 unit-test: $(UNIT_TESTS)
 	@for t in $(UNIT_TESTS); do echo "--- $$t ---"; ./$$t || exit 1; done
@@ -159,6 +160,9 @@ $(BUILD_DIR)/test_ferro_engine: tests/test_ferro_engine.cpp tests/nt_stubs.h eng
 
 $(BUILD_DIR)/test_quantum_engine: tests/test_quantum_engine.cpp tests/nt_stubs.h engines/QuantumEngine.cpp engines/QuantumEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_quantum_engine.cpp -lm -o $@
+
+$(BUILD_DIR)/test_factories: tests/test_factories.cpp $(PLUGINS_DIR)/$(PROJECT).$(DYLIB_EXT) | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I$(DISTINGNT_API)/include tests/test_factories.cpp -ldl -o $@
 
 # Clean build artifacts
 clean:
