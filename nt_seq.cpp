@@ -100,29 +100,30 @@ bool deserialise(_NT_algorithm* self, _NT_jsonParse& parse)
 
 DEDICATED_FACTORY(thorpFactory,
     NT_MULTICHAR('N', 's', 'T', 'h'),
-    "Thorp", "Pattern arpeggiator and chain sequencer", kEngineThorp);
+    "Seq Thorp", "Pattern arpeggiator and chain sequencer", kEngineThorp);
 DEDICATED_FACTORY(somaFactory,
     NT_MULTICHAR('N', 's', 'S', 'o'),
-    "Soma", "Mutating probability sequencer", kEngineSoma);
-DEDICATED_FACTORY(aeSeqFactory,
+    "Seq Soma", "Mutating probability sequencer", kEngineSoma);
+// Keep the original NsAe GUID so existing presets continue to resolve.
+DEDICATED_FACTORY(siftFactory,
     NT_MULTICHAR('N', 's', 'A', 'e'),
-    "AE Seq", "Analog-style CV and gate sequencer", kEngineAeSeq);
+    "Seq Sift", "Pseudo-random CV and threshold-sifted gate sequencer", kEngineSift);
 DEDICATED_FACTORY(markovFactory,
     NT_MULTICHAR('N', 's', 'M', 'k'),
-    "Markov", "Markov-chain melodic sequencer", kEngineSeqMarkov);
+    "Seq Markov", "Markov-chain melodic sequencer", kEngineSeqMarkov);
 DEDICATED_FACTORY(ferroFactory,
     NT_MULTICHAR('N', 's', 'F', 'e'),
-    "Ferro", "Ferromagnetic tape-loop chord sequencer", kEngineFerro);
+    "Seq Ferro", "Ferromagnetic tape-loop chord sequencer", kEngineFerro);
 DEDICATED_FACTORY(quantumFactory,
     NT_MULTICHAR('N', 's', 'Q', 'u'),
-    "Quantum", "Hierarchical generative sequencer", kEngineQuantum);
+    "Seq Quantum", "Hierarchical generative sequencer", kEngineQuantum);
 
 #undef DEDICATED_FACTORY
 
 static const _NT_factory* const factories[] = {
     &thorpFactory,
     &somaFactory,
-    &aeSeqFactory,
+    &siftFactory,
     &markovFactory,
     &ferroFactory,
     &quantumFactory,

@@ -55,7 +55,7 @@ constexpr int kMaxPageIndices = kMaxTotalParams;
 enum EngineType {
     kEngineThorp = 0,
     kEngineSoma,
-    kEngineAeSeq,
+    kEngineSift,
     kEngineSeqMarkov,
     kEngineFerro,
     kEngineQuantum,

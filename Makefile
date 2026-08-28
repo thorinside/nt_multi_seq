@@ -20,7 +20,7 @@ SOURCES = \
 	clock/ClockProcessor.cpp \
 	engines/FocusData.cpp \
 	engines/SomaEngine.cpp \
-	engines/AeSequencerEngine.cpp \
+	engines/SiftEngine.cpp \
 	engines/SeqMarkovEngine.cpp \
 	engines/ThorpEngine.cpp \
 	engines/FerromagneticEngine.cpp \
@@ -124,7 +124,7 @@ UNIT_TESTS = \
 	$(BUILD_DIR)/test_clock_processor \
 	$(BUILD_DIR)/test_thorp_engine \
 	$(BUILD_DIR)/test_soma_engine \
-	$(BUILD_DIR)/test_ae_engine \
+	$(BUILD_DIR)/test_sift_engine \
 	$(BUILD_DIR)/test_markov_engine \
 	$(BUILD_DIR)/test_ferro_engine \
 	$(BUILD_DIR)/test_quantum_engine \
@@ -145,8 +145,8 @@ $(BUILD_DIR)/test_thorp_engine: tests/test_thorp_engine.cpp tests/nt_stubs.h eng
 $(BUILD_DIR)/test_soma_engine: tests/test_soma_engine.cpp tests/nt_stubs.h engines/SomaEngine.cpp engines/SomaEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_soma_engine.cpp -lm -o $@
 
-$(BUILD_DIR)/test_ae_engine: tests/test_ae_engine.cpp tests/nt_stubs.h engines/AeSequencerEngine.cpp engines/AeSequencerEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
-	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_ae_engine.cpp -lm -o $@
+$(BUILD_DIR)/test_sift_engine: tests/test_sift_engine.cpp tests/nt_stubs.h engines/SiftEngine.cpp engines/SiftEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_sift_engine.cpp -lm -o $@
 
 $(BUILD_DIR)/test_markov_engine: tests/test_markov_engine.cpp tests/nt_stubs.h engines/SeqMarkovEngine.cpp engines/SeqMarkovEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_markov_engine.cpp -lm -o $@

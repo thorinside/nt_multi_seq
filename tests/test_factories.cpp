@@ -5,7 +5,7 @@
 #include "../nt_seq.h"
 #include "../engines/ThorpEngine.h"
 #include "../engines/SomaEngine.h"
-#include "../engines/AeSequencerEngine.h"
+#include "../engines/SiftEngine.h"
 #include "../engines/SeqMarkovEngine.h"
 #include "../engines/FerromagneticEngine.h"
 #include "../engines/QuantumEngine.h"
@@ -69,7 +69,7 @@ int main()
         "plugin exposes six fixed-engine factories");
 
     static const char* const expectedNames[] = {
-        "Thorp", "Soma", "AE Seq", "Markov", "Ferro", "Quantum"
+        "Seq Thorp", "Seq Soma", "Seq Sift", "Seq Markov", "Seq Ferro", "Seq Quantum"
     };
     static const uint32_t expectedGuids[] = {
         NT_MULTICHAR('N', 's', 'T', 'h'),
@@ -83,7 +83,7 @@ int main()
     static const size_t engineSizes[] = {
         sizeof(ThorpEngine),
         sizeof(SomaEngine),
-        sizeof(AeSequencerEngine),
+        sizeof(SiftEngine),
         sizeof(SeqMarkovEngine),
         sizeof(FerromagneticEngine),
         sizeof(QuantumEngine),

@@ -1,6 +1,6 @@
 #include "nt_seq.h"
 #include "engines/SomaEngine.h"
-#include "engines/AeSequencerEngine.h"
+#include "engines/SiftEngine.h"
 #include "engines/SeqMarkovEngine.h"
 #include "engines/ThorpEngine.h"
 #include "engines/FerromagneticEngine.h"
@@ -11,13 +11,13 @@
 #include <string.h>
 
 static_assert(alignof(SomaEngine) <= 8, "SomaEngine alignment exceeds 8 bytes");
-static_assert(alignof(AeSequencerEngine) <= 8, "AeSequencerEngine alignment exceeds 8 bytes");
+static_assert(alignof(SiftEngine) <= 8, "SiftEngine alignment exceeds 8 bytes");
 static_assert(alignof(SeqMarkovEngine) <= 8, "SeqMarkovEngine alignment exceeds 8 bytes");
 static_assert(alignof(ThorpEngine) <= 8, "ThorpEngine alignment exceeds 8 bytes");
 static_assert(alignof(FerromagneticEngine) <= 8, "FerromagneticEngine alignment exceeds 8 bytes");
 static_assert(alignof(QuantumEngine) <= 8, "QuantumEngine alignment exceeds 8 bytes");
 static_assert(SomaEngine::kNumSomaParams <= kMaxEngineParams, "SomaEngine has too many params");
-static_assert(AeSequencerEngine::kNumAeParams <= kMaxEngineParams, "AeSequencerEngine has too many params");
+static_assert(SiftEngine::kNumSiftParams <= kMaxEngineParams, "SiftEngine has too many params");
 static_assert(SeqMarkovEngine::kNumMarkovParams <= kMaxEngineParams, "SeqMarkovEngine has too many params");
 static_assert(ThorpEngine::kNumThorpParams <= kMaxEngineParams, "ThorpEngine has too many params");
 static_assert(FerromagneticEngine::kNumFerroParams <= kMaxEngineParams, "FerromagneticEngine has too many params");
@@ -70,7 +70,7 @@ static int engineParameterCount(EngineType type)
     switch (type) {
     case kEngineThorp:     return ThorpEngine::kNumThorpParams;
     case kEngineSoma:      return SomaEngine::kNumSomaParams;
-    case kEngineAeSeq:     return AeSequencerEngine::kNumAeParams;
+    case kEngineSift:      return SiftEngine::kNumSiftParams;
     case kEngineSeqMarkov: return SeqMarkovEngine::kNumMarkovParams;
     case kEngineFerro:     return FerromagneticEngine::kNumFerroParams;
     case kEngineQuantum:   return QuantumEngine::kNumQuantumParams;
@@ -83,7 +83,7 @@ static size_t engineSize(EngineType type)
     switch (type) {
     case kEngineThorp:     return sizeof(ThorpEngine);
     case kEngineSoma:      return sizeof(SomaEngine);
-    case kEngineAeSeq:     return sizeof(AeSequencerEngine);
+    case kEngineSift:      return sizeof(SiftEngine);
     case kEngineSeqMarkov: return sizeof(SeqMarkovEngine);
     case kEngineFerro:     return sizeof(FerromagneticEngine);
     case kEngineQuantum:   return sizeof(QuantumEngine);
@@ -96,7 +96,7 @@ SequencerEngine* createEngineInstance(EngineType type, uint8_t* mem)
     switch (type) {
     case kEngineThorp:     return new (mem) ThorpEngine();
     case kEngineSoma:      return new (mem) SomaEngine();
-    case kEngineAeSeq:     return new (mem) AeSequencerEngine();
+    case kEngineSift:      return new (mem) SiftEngine();
     case kEngineSeqMarkov: return new (mem) SeqMarkovEngine();
     case kEngineFerro:     return new (mem) FerromagneticEngine();
     case kEngineQuantum:   return new (mem) QuantumEngine();

@@ -8,12 +8,12 @@ The single `nt_seq.o` binary exposes six independent algorithms. Each algorithm 
 
 | Algorithm | Description |
 |-----------|-------------|
-| [Thorp](docs/thorp.md) | Pattern arpeggiator with 23 note patterns, 15 velocity patterns, chain sequencing, and song/jam modes |
-| [Soma](docs/soma.md) | Mutating step sequencer with note and gate mutation probabilities |
-| [AE Seq](docs/ae-seq.md) | Analog-style CV/gate sequencer with independent CV and gate sequence selection and bit-depth control |
-| [Markov](docs/markov.md) | Markov-chain melodic generator with eight behavioral styles |
-| [Ferro](docs/ferromagnetic.md) | Tape-loop chord builder with layered melody, loop trigger, and record gate roles |
-| Quantum | Hierarchical generative sequencer with motif, transformation, and large-form cycles |
+| [Seq Thorp](docs/thorp.md) | Pattern arpeggiator with 23 note patterns, 15 velocity patterns, chain sequencing, and song/jam modes |
+| [Seq Soma](docs/soma.md) | Mutating step sequencer with note and gate mutation probabilities |
+| [Seq Sift](docs/sift.md) | Pseudo-random CV and threshold-sifted gate sequencer with independent sequence selection and bit-depth control |
+| [Seq Markov](docs/markov.md) | Markov-chain melodic generator with eight behavioral styles |
+| [Seq Ferro](docs/ferromagnetic.md) | Tape-loop chord builder with layered melody, loop trigger, and record gate roles |
+| Seq Quantum | Hierarchical generative sequencer with motif, transformation, and large-form cycles |
 
 ## Algorithm Entries
 
@@ -21,12 +21,12 @@ The plugin follows the disting NT multi-factory pattern used by the official SDK
 
 | Algorithm | GUID |
 |-----------|------|
-| `Thorp` | `NsTh` |
-| `Soma` | `NsSo` |
-| `AE Seq` | `NsAe` |
-| `Markov` | `NsMk` |
-| `Ferro` | `NsFe` |
-| `Quantum` | `NsQu` |
+| `Seq Thorp` | `NsTh` |
+| `Seq Soma` | `NsSo` |
+| `Seq Sift` | `NsAe` |
+| `Seq Markov` | `NsMk` |
+| `Seq Ferro` | `NsFe` |
+| `Seq Quantum` | `NsQu` |
 
 Every factory has zero specifications. Selecting an algorithm adds one instance immediately.
 
@@ -35,7 +35,7 @@ Every factory has zero specifications. Selecting an algorithm adds one instance 
 Each algorithm opens directly on its engine display:
 
 - **Line 1**: Engine name and scale info (root note, scale file, note count)
-- **Line 2**: Step bar with per-step segments (or AE Seq's CV-level/gate visualization) plus step counter
+- **Line 2**: Step bar with per-step segments (or Seq Sift's CV-level/gate visualization) plus step counter
 - **Line 3**: Current note, gate state (ON/OFF), and velocity voltage
 - **Lines 4-5**: Engine-specific parameter readout (varies by engine -- see individual engine docs)
 
@@ -123,7 +123,7 @@ engines/
   SequencerEngine.h       Abstract base class for all engines
   ThorpEngine.cpp/h       Pattern arpeggiator
   SomaEngine.cpp/h        Mutating step sequencer
-  AeSequencerEngine.cpp/h Analog-style CV/gate sequencer
+  SiftEngine.cpp/h Seq Sift implementation (pseudo-random CV and thresholded gates)
   SeqMarkovEngine.cpp/h   Markov chain melodic generator
   FerromagneticEngine.cpp/h Tape-loop chord sequencer
   QuantumEngine.cpp/h     Hierarchical generative sequencer
@@ -137,7 +137,7 @@ tests/
   test_clock_processor.cpp  Unit tests for clock divider
   test_thorp_engine.cpp   Unit tests for Thorp engine
   test_soma_engine.cpp    Unit tests for Soma engine
-  test_ae_engine.cpp      Unit tests for AE Sequencer engine
+  test_sift_engine.cpp    Unit tests for Seq Sift
   test_markov_engine.cpp  Unit tests for Markov engine
   test_factories.cpp      Factory, fixed-page, SRAM, and CV routing integration tests
 ```

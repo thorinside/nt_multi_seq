@@ -1,6 +1,6 @@
 #include "nt_seq.h"
 #include "engines/ThorpEngine.h"
-#include "engines/AeSequencerEngine.h"
+#include "engines/SiftEngine.h"
 #include "engines/SeqMarkovEngine.h"
 #include "engines/SomaEngine.h"
 #include "engines/FerromagneticEngine.h"
@@ -229,7 +229,7 @@ uint32_t hasCustomUi(_NT_algorithm* self)
     case kEngineSeqMarkov:
         return kNT_encoderL | kNT_encoderR
             | kNT_potL | kNT_potC | kNT_potR | kNT_potButtonL | kNT_potButtonR;
-    case kEngineAeSeq:
+    case kEngineSift:
     case kEngineSoma:
     case kEngineFerro:
     case kEngineQuantum:
@@ -248,39 +248,39 @@ void customUi(_NT_algorithm* self, const _NT_uiData& data)
     uint32_t paramOffset = NT_parameterOffset();
     SequencerState& seq = alg->seq;
 
-    if (seq.engineType == kEngineAeSeq && seq.engine) {
+    if (seq.engineType == kEngineSift && seq.engine) {
         int engBase = seq.engineParamBase;
 
         if (data.encoders[0] != 0) {
-            int v = alg->v[engBase + AeSequencerEngine::kAeCvSeq] + data.encoders[0];
+            int v = alg->v[engBase + SiftEngine::kSiftCvSeq] + data.encoders[0];
             while (v < 1) v += 20;
             while (v > 20) v -= 20;
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeCvSeq) + paramOffset, (int16_t)v);
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SiftEngine::kSiftCvSeq) + paramOffset, (int16_t)v);
         }
         if (data.encoders[1] != 0) {
-            int v = alg->v[engBase + AeSequencerEngine::kAeGateSeq] + data.encoders[1];
+            int v = alg->v[engBase + SiftEngine::kSiftGateSeq] + data.encoders[1];
             while (v < 1) v += 20;
             while (v > 20) v -= 20;
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeGateSeq) + paramOffset, (int16_t)v);
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SiftEngine::kSiftGateSeq) + paramOffset, (int16_t)v);
         }
 
         if (data.controls & kNT_potL) {
             int v = 1 + (int)(data.pots[0] * 99.999f);
             if (v < 1) v = 1;
             if (v > 100) v = 100;
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeThreshold) + paramOffset, (int16_t)v);
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SiftEngine::kSiftThreshold) + paramOffset, (int16_t)v);
         }
         if (data.controls & kNT_potC) {
             int v = 2 + (int)(data.pots[1] * 14.999f);
             if (v < 2) v = 2;
             if (v > 16) v = 16;
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeBitDepth) + paramOffset, (int16_t)v);
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SiftEngine::kSiftBitDepth) + paramOffset, (int16_t)v);
         }
         if (data.controls & kNT_potR) {
             int v = (int)(data.pots[2] * 100.0f + 0.5f);
             if (v < 0) v = 0;
             if (v > 100) v = 100;
-            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + AeSequencerEngine::kAeVelocity) + paramOffset, (int16_t)v);
+            NT_setParameterFromUi((uint32_t)algIdx, (uint32_t)(engBase + SiftEngine::kSiftVelocity) + paramOffset, (int16_t)v);
         }
         return;
     }

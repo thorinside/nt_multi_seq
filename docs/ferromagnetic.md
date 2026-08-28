@@ -1,4 +1,4 @@
-# Ferromagnetic Sequencer Engine
+# Seq Ferro
 
 A sequencer engine that builds chordal textures over multiple passes of an external tape loop (e.g., Instruo Lubadh). Notes accumulate into chords across layers via sound-on-sound recording.
 
@@ -70,8 +70,8 @@ When focused:
 
 ## Example Patch
 
-1. Set Ch 1 to Ferro, Role: Melody, Loop Steps: 16, Max Layers: 4, Voicing: Triads
-2. Set Ch 2 to Ferro, Role: Loop Trig, Loop Steps: 16
+1. Set Ch 1 to Seq Ferro, Role: Melody, Loop Steps: 16, Max Layers: 4, Voicing: Triads
+2. Set Ch 2 to Seq Ferro, Role: Loop Trig, Loop Steps: 16
 3. Patch a clock source to both channels' Clock In
 4. Patch Ch 1 pitch/gate to a synth voice, synth audio to Lubadh input
 5. Patch Ch 2 gate to Lubadh retrigger input

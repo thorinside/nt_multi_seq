@@ -1,4 +1,4 @@
-// Unit tests for AeSequencerEngine.
+// Unit tests for SiftEngine.
 // Standalone compilation with NT API stubs.
 
 #include "nt_stubs.h"
@@ -7,8 +7,8 @@
 #define private public
 #define protected public
 
-#include "../engines/AeSequencerEngine.h"
-#include "../engines/AeSequencerEngine.cpp"
+#include "../engines/SiftEngine.h"
+#include "../engines/SiftEngine.cpp"
 #include "../scale/ScaleQuantizer.cpp"
 
 #undef private
@@ -50,7 +50,7 @@ static int tests = 0;
 
 static void test_sequence_raw_deterministic()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
     // Same (seed, step) must always return the same value
@@ -64,7 +64,7 @@ static void test_sequence_raw_deterministic()
 
 static void test_sequence_raw_varies()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
     uint32_t seed = engine.voltSeqs_[0].seed;
@@ -86,14 +86,14 @@ static void test_sequence_raw_varies()
 
 static void test_bit_depth_2()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
     // bitDepth=2 -> levels = (1<<2)-1 = 3, giving 4 quantization points: 0/3, 1/3, 2/3, 3/3
-    engine.parameterChanged(AeSequencerEngine::kAeBitDepth, 2);
-    engine.parameterChanged(AeSequencerEngine::kAePolarity, AeSequencerEngine::kPolarityPositive);
-    engine.parameterChanged(AeSequencerEngine::kAeMinCv, 0);
-    engine.parameterChanged(AeSequencerEngine::kAeMaxCv, 10); // 1.0V
+    engine.parameterChanged(SiftEngine::kSiftBitDepth, 2);
+    engine.parameterChanged(SiftEngine::kSiftPolarity, SiftEngine::kPolarityPositive);
+    engine.parameterChanged(SiftEngine::kSiftMinCv, 0);
+    engine.parameterChanged(SiftEngine::kSiftMaxCv, 10); // 1.0V
 
     float unique[4];
     int numUnique = 0;
@@ -116,12 +116,12 @@ static void test_bit_depth_2()
 
 static void test_polarity_positive()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
-    engine.parameterChanged(AeSequencerEngine::kAePolarity, AeSequencerEngine::kPolarityPositive);
-    engine.parameterChanged(AeSequencerEngine::kAeMinCv, 0);
-    engine.parameterChanged(AeSequencerEngine::kAeMaxCv, 50); // 5.0V
+    engine.parameterChanged(SiftEngine::kSiftPolarity, SiftEngine::kPolarityPositive);
+    engine.parameterChanged(SiftEngine::kSiftMinCv, 0);
+    engine.parameterChanged(SiftEngine::kSiftMaxCv, 50); // 5.0V
 
     for (int i = 0; i < 100; i++) {
         EngineOutput out = engine.clockTick(nullptr);
@@ -132,12 +132,12 @@ static void test_polarity_positive()
 
 static void test_polarity_negative()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
-    engine.parameterChanged(AeSequencerEngine::kAePolarity, AeSequencerEngine::kPolarityNegative);
-    engine.parameterChanged(AeSequencerEngine::kAeMinCv, -50); // -5.0V
-    engine.parameterChanged(AeSequencerEngine::kAeMaxCv, 0);
+    engine.parameterChanged(SiftEngine::kSiftPolarity, SiftEngine::kPolarityNegative);
+    engine.parameterChanged(SiftEngine::kSiftMinCv, -50); // -5.0V
+    engine.parameterChanged(SiftEngine::kSiftMaxCv, 0);
 
     for (int i = 0; i < 100; i++) {
         EngineOutput out = engine.clockTick(nullptr);
@@ -148,12 +148,12 @@ static void test_polarity_negative()
 
 static void test_polarity_bipolar()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
-    engine.parameterChanged(AeSequencerEngine::kAePolarity, AeSequencerEngine::kPolarityBipolar);
-    engine.parameterChanged(AeSequencerEngine::kAeMinCv, -50); // -5.0V
-    engine.parameterChanged(AeSequencerEngine::kAeMaxCv, 50);  // +5.0V
+    engine.parameterChanged(SiftEngine::kSiftPolarity, SiftEngine::kPolarityBipolar);
+    engine.parameterChanged(SiftEngine::kSiftMinCv, -50); // -5.0V
+    engine.parameterChanged(SiftEngine::kSiftMaxCv, 50);  // +5.0V
 
     bool hasPositive = false;
     bool hasNegative = false;
@@ -170,10 +170,10 @@ static void test_polarity_bipolar()
 
 static void test_threshold_low()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
-    engine.parameterChanged(AeSequencerEngine::kAeThreshold, 1); // very low threshold
+    engine.parameterChanged(SiftEngine::kSiftThreshold, 1); // very low threshold
 
     int gateCount = 0;
     for (int i = 0; i < 100; i++) {
@@ -188,10 +188,10 @@ static void test_threshold_low()
 
 static void test_threshold_high()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
-    engine.parameterChanged(AeSequencerEngine::kAeThreshold, 100); // very high threshold
+    engine.parameterChanged(SiftEngine::kSiftThreshold, 100); // very high threshold
 
     int gateCount = 0;
     for (int i = 0; i < 100; i++) {
@@ -207,11 +207,11 @@ static void test_threshold_high()
 
 static void test_step_counter_independence()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
-    engine.parameterChanged(AeSequencerEngine::kAeCvSteps, 4);
-    engine.parameterChanged(AeSequencerEngine::kAeGateSteps, 8);
+    engine.parameterChanged(SiftEngine::kSiftCvSteps, 4);
+    engine.parameterChanged(SiftEngine::kSiftGateSteps, 8);
 
     // Clock 4 times: CV step wraps to 0, gate step is at 4
     for (int i = 0; i < 4; i++) {
@@ -238,12 +238,12 @@ static void test_step_counter_independence()
 
 static void test_reset_reproduces_sequence()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
     // Use specific settings for determinism
-    engine.parameterChanged(AeSequencerEngine::kAeCvSteps, 8);
-    engine.parameterChanged(AeSequencerEngine::kAeGateSteps, 8);
+    engine.parameterChanged(SiftEngine::kSiftCvSteps, 8);
+    engine.parameterChanged(SiftEngine::kSiftGateSteps, 8);
 
     static const int N = 16;
     float pitches1[N];
@@ -272,21 +272,21 @@ static void test_reset_reproduces_sequence()
 
 static void test_velocity_output()
 {
-    AeSequencerEngine engine;
+    SiftEngine engine;
     engine.init(48000);
 
     // velocity=0 -> 0 * 0.05 = 0.0V
-    engine.parameterChanged(AeSequencerEngine::kAeVelocity, 0);
+    engine.parameterChanged(SiftEngine::kSiftVelocity, 0);
     EngineOutput out0 = engine.clockTick(nullptr);
     ASSERT_FLOAT_EQ(out0.velocity, 0.0f, "velocity=0 -> 0.0V");
 
     // velocity=100 -> 100 * 0.05 = 5.0V
-    engine.parameterChanged(AeSequencerEngine::kAeVelocity, 100);
+    engine.parameterChanged(SiftEngine::kSiftVelocity, 100);
     EngineOutput out100 = engine.clockTick(nullptr);
     ASSERT_FLOAT_EQ(out100.velocity, 5.0f, "velocity=100 -> 5.0V");
 
     // velocity=50 -> 50 * 0.05 = 2.5V
-    engine.parameterChanged(AeSequencerEngine::kAeVelocity, 50);
+    engine.parameterChanged(SiftEngine::kSiftVelocity, 50);
     EngineOutput out50 = engine.clockTick(nullptr);
     ASSERT_FLOAT_EQ(out50.velocity, 2.5f, "velocity=50 -> 2.5V");
 }

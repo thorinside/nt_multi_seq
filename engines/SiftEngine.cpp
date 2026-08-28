@@ -1,4 +1,4 @@
-#include "AeSequencerEngine.h"
+#include "SiftEngine.h"
 #include "../scale/ScaleQuantizer.h"
 
 static const char* const polarityStrings[] = {
@@ -12,7 +12,7 @@ static inline int clampInt(int v, int lo, int hi)
     return v;
 }
 
-AeSequencerEngine::AeSequencerEngine()
+SiftEngine::SiftEngine()
     : cvSeq_(0)
     , gateSeq_(0)
     , cvSteps_(8)
@@ -27,7 +27,7 @@ AeSequencerEngine::AeSequencerEngine()
 {
 }
 
-uint32_t AeSequencerEngine::rng()
+uint32_t SiftEngine::rng()
 {
     rngState_ ^= rngState_ << 13;
     rngState_ ^= rngState_ >> 17;
@@ -35,7 +35,7 @@ uint32_t AeSequencerEngine::rng()
     return rngState_;
 }
 
-int16_t AeSequencerEngine::sequenceRaw(uint32_t seed, int stepIndex) const
+int16_t SiftEngine::sequenceRaw(uint32_t seed, int stepIndex) const
 {
     // Deterministic hash from (seed, step) gives stable pseudo-random
     // 16-bit values without storing 32-step tables for all 20x2 banks.
@@ -48,7 +48,7 @@ int16_t AeSequencerEngine::sequenceRaw(uint32_t seed, int stepIndex) const
     return (int16_t)(x & 0xFFFFu);
 }
 
-void AeSequencerEngine::init(uint32_t sampleRate)
+void SiftEngine::init(uint32_t sampleRate)
 {
     rngState_ = sampleRate ^ 0xCAFEBABE;
 
@@ -60,7 +60,7 @@ void AeSequencerEngine::init(uint32_t sampleRate)
     }
 }
 
-void AeSequencerEngine::getEffectiveRange(float& effMin, float& effMax) const
+void SiftEngine::getEffectiveRange(float& effMin, float& effMax) const
 {
     float minV = (float)minCv_ / 10.0f;
     float maxV = (float)maxCv_ / 10.0f;
@@ -81,7 +81,7 @@ void AeSequencerEngine::getEffectiveRange(float& effMin, float& effMax) const
     }
 }
 
-float AeSequencerEngine::mapRawToVoltage(int16_t raw, float effMin, float effMax) const
+float SiftEngine::mapRawToVoltage(int16_t raw, float effMin, float effMax) const
 {
     float fraction;
     switch (polarity_) {
@@ -102,7 +102,7 @@ float AeSequencerEngine::mapRawToVoltage(int16_t raw, float effMin, float effMax
     return fraction * (effMax - effMin) + effMin;
 }
 
-float AeSequencerEngine::quantizeVoltage(float value, float effMin, float effMax) const
+float SiftEngine::quantizeVoltage(float value, float effMin, float effMax) const
 {
     int levels = (1 << bitDepth_) - 1;
     if (levels < 1) levels = 1;
@@ -116,7 +116,7 @@ float AeSequencerEngine::quantizeVoltage(float value, float effMin, float effMax
     return quantized;
 }
 
-EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* scale)
+EngineOutput SiftEngine::clockTick(const ScaleQuantizer* scale)
 {
     EngineOutput out = { 0.0f, 0.0f, 5.0f, 60 };
 
@@ -142,7 +142,7 @@ EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* scale)
     gs.currentStep = (gs.currentStep + 1) % gateSteps;
 
     // Gate based on threshold
-    // AE essence: threshold 16-bit raw values for gate state.
+    // Sift behavior: threshold 16-bit raw values for gate state.
     int gateRaw = (int)sequenceRaw(gs.seed, (int)gs.currentStep);
     int gateNorm = ((gateRaw + 32768) * 100) / 65535; // 0..100
     out.gate = (gateNorm >= threshold_) ? 5.0f : 0.0f;
@@ -167,7 +167,7 @@ EngineOutput AeSequencerEngine::clockTick(const ScaleQuantizer* scale)
     return out;
 }
 
-void AeSequencerEngine::reset()
+void SiftEngine::reset()
 {
     for (int s = 0; s < kNumSequences; ++s) {
         voltSeqs_[s].currentStep = 0;
@@ -175,45 +175,45 @@ void AeSequencerEngine::reset()
     }
 }
 
-void AeSequencerEngine::parameterChanged(int localIndex, int16_t value)
+void SiftEngine::parameterChanged(int localIndex, int16_t value)
 {
     switch (localIndex) {
-    case kAeCvSeq:
+    case kSiftCvSeq:
         cvSeq_ = clampInt((int)value - 1, 0, kNumSequences - 1);
         break;
-    case kAeGateSeq:
+    case kSiftGateSeq:
         gateSeq_ = clampInt((int)value - 1, 0, kNumSequences - 1);
         break;
-    case kAeCvSteps:    cvSteps_ = clampInt(value, 1, kMaxSteps); break;
-    case kAeMinCv:      minCv_ = clampInt(value, -100, 100); break;
-    case kAeMaxCv:      maxCv_ = clampInt(value, -100, 100); break;
-    case kAePolarity:   polarity_ = clampInt(value, 0, kNumPolarities - 1); break;
-    case kAeBitDepth:   bitDepth_ = clampInt(value, 2, 16); break;
-    case kAeGateSteps:  gateSteps_ = clampInt(value, 1, kMaxSteps); break;
-    case kAeThreshold:  threshold_ = clampInt(value, 1, 100); break;
-    case kAeVelocity:   velocity_ = clampInt(value, 0, 100); break;
+    case kSiftCvSteps:    cvSteps_ = clampInt(value, 1, kMaxSteps); break;
+    case kSiftMinCv:      minCv_ = clampInt(value, -100, 100); break;
+    case kSiftMaxCv:      maxCv_ = clampInt(value, -100, 100); break;
+    case kSiftPolarity:   polarity_ = clampInt(value, 0, kNumPolarities - 1); break;
+    case kSiftBitDepth:   bitDepth_ = clampInt(value, 2, 16); break;
+    case kSiftGateSteps:  gateSteps_ = clampInt(value, 1, kMaxSteps); break;
+    case kSiftThreshold:  threshold_ = clampInt(value, 1, 100); break;
+    case kSiftVelocity:   velocity_ = clampInt(value, 0, 100); break;
     }
 }
 
-int AeSequencerEngine::getParameterDefs(_NT_parameter* defs) const
+int SiftEngine::getParameterDefs(_NT_parameter* defs) const
 {
-    defs[kAeCvSeq]     = { .name = "CV Seq",    .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeGateSeq]   = { .name = "Gate Seq",  .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeCvSteps]   = { .name = "CV Steps",  .min = 1,    .max = kMaxSteps,     .def = 8,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeMinCv]     = { .name = "Min CV",    .min = -100, .max = 100,           .def = -10,.unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
-    defs[kAeMaxCv]     = { .name = "Max CV",    .min = -100, .max = 100,           .def = 10, .unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
-    defs[kAePolarity]  = { .name = "Polarity",  .min = 0,    .max = kNumPolarities - 1, .def = kPolarityBipolar, .unit = kNT_unitEnum, .scaling = kNT_scalingNone, .enumStrings = polarityStrings };
-    defs[kAeBitDepth]  = { .name = "CV Bit Depth", .min = 2, .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeGateSteps] = { .name = "Gate Steps", .min = 1,   .max = kMaxSteps,     .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeThreshold] = { .name = "Gate Threshold", .min = 1, .max = 100,         .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kAeVelocity]  = { .name = "Velocity",  .min = 0,    .max = 100,           .def = 100,.unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    return kNumAeParams;
+    defs[kSiftCvSeq]     = { .name = "CV Seq",    .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kSiftGateSeq]   = { .name = "Gate Seq",  .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kSiftCvSteps]   = { .name = "CV Steps",  .min = 1,    .max = kMaxSteps,     .def = 8,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kSiftMinCv]     = { .name = "Min CV",    .min = -100, .max = 100,           .def = -10,.unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
+    defs[kSiftMaxCv]     = { .name = "Max CV",    .min = -100, .max = 100,           .def = 10, .unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
+    defs[kSiftPolarity]  = { .name = "Polarity",  .min = 0,    .max = kNumPolarities - 1, .def = kPolarityBipolar, .unit = kNT_unitEnum, .scaling = kNT_scalingNone, .enumStrings = polarityStrings };
+    defs[kSiftBitDepth]  = { .name = "CV Bit Depth", .min = 2, .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kSiftGateSteps] = { .name = "Gate Steps", .min = 1,   .max = kMaxSteps,     .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kSiftThreshold] = { .name = "Gate Threshold", .min = 1, .max = 100,         .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    defs[kSiftVelocity]  = { .name = "Velocity",  .min = 0,    .max = 100,           .def = 100,.unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
+    return kNumSiftParams;
 }
 
-int AeSequencerEngine::currentStep() const { return voltSeqs_[cvSeq_].currentStep; }
-int AeSequencerEngine::sequenceLength() const { return cvSteps_; }
+int SiftEngine::currentStep() const { return voltSeqs_[cvSeq_].currentStep; }
+int SiftEngine::sequenceLength() const { return cvSteps_; }
 
-int AeSequencerEngine::cvStepCount() const
+int SiftEngine::cvStepCount() const
 {
     int n = cvSteps_;
     if (n < 1) n = 1;
@@ -221,7 +221,7 @@ int AeSequencerEngine::cvStepCount() const
     return n;
 }
 
-int AeSequencerEngine::gateStepCount() const
+int SiftEngine::gateStepCount() const
 {
     int n = gateSteps_;
     if (n < 1) n = 1;
@@ -229,10 +229,10 @@ int AeSequencerEngine::gateStepCount() const
     return n;
 }
 
-int AeSequencerEngine::currentCvStep() const { return voltSeqs_[cvSeq_].currentStep; }
-int AeSequencerEngine::currentGateStep() const { return gateSeqs_[gateSeq_].currentStep; }
+int SiftEngine::currentCvStep() const { return voltSeqs_[cvSeq_].currentStep; }
+int SiftEngine::currentGateStep() const { return gateSeqs_[gateSeq_].currentStep; }
 
-uint8_t AeSequencerEngine::getCvLevel(int stepIndex) const
+uint8_t SiftEngine::getCvLevel(int stepIndex) const
 {
     int cvLen = cvStepCount();
     int idx = stepIndex % cvLen;
@@ -257,7 +257,7 @@ uint8_t AeSequencerEngine::getCvLevel(int stepIndex) const
     return (uint8_t)((quantIdx * 15 + (levels / 2)) / levels);
 }
 
-bool AeSequencerEngine::getGateOn(int stepIndex) const
+bool SiftEngine::getGateOn(int stepIndex) const
 {
     int gateLen = gateStepCount();
     int idx = stepIndex % gateLen;
@@ -267,7 +267,7 @@ bool AeSequencerEngine::getGateOn(int stepIndex) const
     return (gateNorm >= threshold_);
 }
 
-int AeSequencerEngine::getStatusText(char* buf, int maxLen) const
+int SiftEngine::getStatusText(char* buf, int maxLen) const
 {
     // Show "V1 G1 8/16"
     int len = 0;
@@ -283,7 +283,7 @@ int AeSequencerEngine::getStatusText(char* buf, int maxLen) const
     return len;
 }
 
-void AeSequencerEngine::getFocusBarInfo(FocusBarInfo& info) const
+void SiftEngine::getFocusBarInfo(FocusBarInfo& info) const
 {
     int cvLen = cvStepCount();
     int gateLen = gateStepCount();
@@ -307,7 +307,7 @@ void AeSequencerEngine::getFocusBarInfo(FocusBarInfo& info) const
         gateBar.levels[i] = getGateOn(i) ? 12 : 2;
 }
 
-void AeSequencerEngine::getFocusDetail(FocusDetail& detail) const
+void SiftEngine::getFocusDetail(FocusDetail& detail) const
 {
     FocusDetailLine& line1 = detail.lines[0];
     FocusDetailLine& line2 = detail.lines[1];

@@ -12,7 +12,7 @@ public:
     void reset() override;
     void parameterChanged(int localIndex, int16_t value) override;
     int getParameterDefs(_NT_parameter* defs) const override;
-    const char* name() const override { return "Markov"; }
+    const char* name() const override { return "Seq Markov"; }
     bool usesTimedGate() const override { return true; }
     int gateLengthPercent() const override { return 99; }
     void getFocusDetail(FocusDetail& detail) const override;

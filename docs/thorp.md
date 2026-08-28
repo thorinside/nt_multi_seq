@@ -1,4 +1,4 @@
-# Thorp Engine
+# Seq Thorp
 
 A pattern arpeggiator that plays held notes through rhythmic and melodic patterns. Feed it notes via MIDI or CV, choose a pattern, and Thorp arpeggates them with velocity shaping, octave jumps, and chain sequencing.
 
@@ -73,7 +73,7 @@ In **Song** mode, Thorp chains multiple slots together. When the current slot fi
 
 ## Focus UI Controls
 
-When focused on a Thorp channel, the hardware controls become a song editor:
+When focused on a Seq Thorp channel, the hardware controls become a song editor:
 
 | Control | Function |
 |---------|----------|

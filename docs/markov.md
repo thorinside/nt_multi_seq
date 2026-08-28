@@ -1,4 +1,4 @@
-# Markov Engine
+# Seq Markov
 
 A Markov chain melodic generator that produces evolving sequences using probability matrices shaped by behavioral style parameters. Rather than hardcoding transition tables, Markov computes note-to-note weights on the fly, so it works with any scale size -- from 5-note pentatonic to 31-tone equal temperament.
 
@@ -61,7 +61,7 @@ Markov uses one of 8 hardcoded 16-step rhythm patterns (selected based on Emotio
 
 ## Focus UI Controls
 
-When focused on a Markov channel:
+When focused on a Seq Markov channel:
 
 | Control | Function |
 |---------|----------|

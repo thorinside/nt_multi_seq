@@ -1,6 +1,6 @@
-# AE Seq Engine
+# Seq Sift
 
-An analog-style CV/gate sequencer inspired by the AE Modular aesthetic. AE Seq uses deterministic pseudo-random sequences seeded from random values, giving you 20 independent CV sequences and 20 independent gate sequences that are stable and repeatable but sound complex and unpredictable.
+Seq Sift is a pseudo-random CV/gate sequencer that filters its gate sequence through an adjustable threshold, like flour through a sifter. It uses deterministic sequences seeded from random values, giving you 20 independent CV sequences and 20 independent gate sequences that are stable and repeatable but sound complex and unpredictable.
 
 ## How It Works
 
@@ -39,7 +39,7 @@ CV Steps and Gate Steps are independent. If CV Steps is 8 and Gate Steps is 16, 
 
 ## Focus UI Controls
 
-When focused on an AE Seq channel:
+When focused on a Seq Sift channel:
 
 | Control | Function |
 |---------|----------|

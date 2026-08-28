@@ -1,4 +1,4 @@
-# Soma Engine
+# Seq Soma
 
 A mutating step sequencer. Soma generates a random note and gate pattern on startup, then continuously mutates it based on probability parameters. The result is a sequence that evolves over time while maintaining a sense of continuity.
 

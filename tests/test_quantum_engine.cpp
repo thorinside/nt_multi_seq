@@ -103,7 +103,7 @@ static void test_parameter_defs_count()
 static void test_name()
 {
     QuantumEngine engine;
-    ASSERT_TRUE(strcmp(engine.name(), "Quantum") == 0, "name() == Quantum");
+    ASSERT_TRUE(strcmp(engine.name(), "Seq Quantum") == 0, "name() == Seq Quantum");
 }
 
 // --- 2. Motif playback ---

@@ -1,18 +1,18 @@
-#ifndef AE_SEQUENCER_ENGINE_H
-#define AE_SEQUENCER_ENGINE_H
+#ifndef SIFT_ENGINE_H
+#define SIFT_ENGINE_H
 
 #include "SequencerEngine.h"
 
-class AeSequencerEngine : public SequencerEngine {
+class SiftEngine : public SequencerEngine {
 public:
-    AeSequencerEngine();
+    SiftEngine();
 
     void init(uint32_t sampleRate) override;
     EngineOutput clockTick(const ScaleQuantizer* scale) override;
     void reset() override;
     void parameterChanged(int localIndex, int16_t value) override;
     int getParameterDefs(_NT_parameter* defs) const override;
-    const char* name() const override { return "AE Seq"; }
+    const char* name() const override { return "Seq Sift"; }
     void getFocusDetail(FocusDetail& detail) const override;
     void getFocusBarInfo(FocusBarInfo& info) const override;
     int currentStep() const override;
@@ -26,17 +26,17 @@ public:
     bool getGateOn(int stepIndex) const;
 
     enum Param {
-        kAeCvSeq = 0,
-        kAeGateSeq,
-        kAeCvSteps,
-        kAeMinCv,
-        kAeMaxCv,
-        kAePolarity,
-        kAeBitDepth,
-        kAeGateSteps,
-        kAeThreshold,
-        kAeVelocity,
-        kNumAeParams
+        kSiftCvSeq = 0,
+        kSiftGateSeq,
+        kSiftCvSteps,
+        kSiftMinCv,
+        kSiftMaxCv,
+        kSiftPolarity,
+        kSiftBitDepth,
+        kSiftGateSteps,
+        kSiftThreshold,
+        kSiftVelocity,
+        kNumSiftParams
     };
 
     enum Polarity {
@@ -85,4 +85,4 @@ private:
     float quantizeVoltage(float value, float effMin, float effMax) const;
 };
 
-#endif // AE_SEQUENCER_ENGINE_H
+#endif // SIFT_ENGINE_H

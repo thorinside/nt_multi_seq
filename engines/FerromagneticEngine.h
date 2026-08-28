@@ -13,7 +13,7 @@ public:
     void reset() override;
     void parameterChanged(int localIndex, int16_t value) override;
     int getParameterDefs(_NT_parameter* defs) const override;
-    const char* name() const override { return "Ferro"; }
+    const char* name() const override { return "Seq Ferro"; }
     void getFocusDetail(FocusDetail& detail) const override;
     void getFocusBarInfo(FocusBarInfo& info) const override;
     int currentStep() const override;
