@@ -4,6 +4,12 @@ A collection of sequencer algorithms for the [Expert Sleepers disting NT](https:
 
 The single `nt_seq.o` binary exposes six independent algorithms. Each algorithm instance contains exactly one fixed sequencer engine with no specifications or runtime engine selection. Add multiple instances to the disting NT stack to combine engines or run several copies of the same engine.
 
+## Requirements and Installation
+
+Seq requires disting NT firmware 1.15.0 or later, which provides C++ plug-in API v13.
+
+Download `nt_seq-plugin.zip` from the latest release and extract it at the root of the disting NT MicroSD card. The installed file should be at `/programs/plug-ins/nt_seq.o`. The module scans that folder at startup or when the card is remounted. Each Seq algorithm can then be loaded from the Add algorithm menu like a built-in algorithm.
+
 ## Engines
 
 | Algorithm | Description |

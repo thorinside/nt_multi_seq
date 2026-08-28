@@ -39,11 +39,15 @@ DEFINES_TEST = $(DEFINES_COMMON) -DNT_EMU_DEBUG
 CXXFLAGS_COMMON = -std=c++11 -Wall -Wextra -fno-rtti -fno-exceptions -Wno-unused-parameter
 
 # Compiler flags - hardware (ARM Cortex-M7)
-CXX_ARM = arm-none-eabi-g++
+CXX_ARM ?= arm-none-eabi-g++
+READELF_ARM ?= arm-none-eabi-readelf
+NM_ARM ?= arm-none-eabi-nm
+SIZE_ARM ?= arm-none-eabi-size
 CXXFLAGS_ARM = $(CXXFLAGS_COMMON) $(DEFINES_HARDWARE) \
 	-mcpu=cortex-m7 \
 	-mfpu=fpv5-d16 \
 	-mfloat-abi=hard \
+	-fPIC \
 	-Os \
 	-ffast-math \
 	-fdata-sections \
@@ -66,12 +70,21 @@ PLUGINS_DIR = plugins
 BUILD_DIR = build
 
 # Targets
-.PHONY: all hardware test unit-test clean
+.PHONY: all hardware inspect test unit-test clean
 
 all: hardware test
 
 # Hardware target - ARM .o for disting NT
 hardware: $(PLUGINS_DIR)/$(PROJECT).o
+
+inspect: hardware
+	@$(READELF_ARM) -h $(PLUGINS_DIR)/$(PROJECT).o | grep -q 'Class:.*ELF32'
+	@$(READELF_ARM) -h $(PLUGINS_DIR)/$(PROJECT).o | grep -q 'Data:.*little endian'
+	@$(READELF_ARM) -h $(PLUGINS_DIR)/$(PROJECT).o | grep -q 'Type:.*REL'
+	@$(READELF_ARM) -h $(PLUGINS_DIR)/$(PROJECT).o | grep -q 'Machine:.*ARM'
+	@$(NM_ARM) -g --defined-only $(PLUGINS_DIR)/$(PROJECT).o | grep -q ' T pluginEntry$$'
+	@$(SIZE_ARM) $(PLUGINS_DIR)/$(PROJECT).o
+	@echo "Hardware artifact inspection passed: $(PLUGINS_DIR)/$(PROJECT).o"
 
 OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(notdir $(SOURCES)))
 
