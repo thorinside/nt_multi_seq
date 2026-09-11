@@ -48,9 +48,7 @@ CXXFLAGS_ARM = $(CXXFLAGS_COMMON) $(DEFINES_HARDWARE) \
 	-mfpu=fpv5-d16 \
 	-mfloat-abi=hard \
 	-Os \
-	-ffast-math \
-	-fdata-sections \
-	-ffunction-sections
+	-ffast-math
 
 # Compiler flags - desktop test
 UNAME_S := $(shell uname -s)
@@ -97,10 +95,22 @@ $(BUILD_DIR)/%.o: clock/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: mix/%.cpp | $(BUILD_DIR)
 	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
+# The disting NT loader has a symbol table limit (1024 entries on 1.19 beta).
+# Strip everything the loader does not need and fail the build if we exceed it.
+MAX_SYMBOLS = 1024
+
 $(PLUGINS_DIR)/$(PROJECT).o: $(OBJS) | $(PLUGINS_DIR)
 	$(CXX_ARM) -r $(OBJS) -o $@
+	arm-none-eabi-strip --strip-unneeded $@
 	@echo "Hardware build complete: $@"
 	@ls -lh $@
+	@$(MAKE) --no-print-directory symbols
+
+.PHONY: symbols
+symbols: $(PLUGINS_DIR)/$(PROJECT).o
+	@count=$$(arm-none-eabi-readelf -s $< | grep -cE '^\s+[0-9]+:'); \
+	echo "Symbol table entries: $$count (limit $(MAX_SYMBOLS))"; \
+	if [ $$count -gt $(MAX_SYMBOLS) ]; then echo "ERROR: too many symbols"; exit 1; fi
 
 # Test target - native .dylib/.so for VCV Rack nt_emu
 test: $(PLUGINS_DIR)/$(PROJECT).$(DYLIB_EXT)
