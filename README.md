@@ -19,9 +19,9 @@ The single `nt_seq.o` binary exposes six independent algorithms. Each algorithm 
 
 | Algorithm | Description |
 |-----------|-------------|
-| [Seq Mix](docs/mix.md) | Combines the pitch, gate, and velocity busses shared by several sequencers: sum or average pitch and quantize it to a `.scl` scale, OR/AND/XOR the gates, sum/average/scale the velocity, with optional sample and hold on the mixed gate |
+| [Seq Mix](docs/mix.md) | Combines the gate, pitch, and velocity of 1 to 8 sequencers (a Channels specification): sum or average pitch and quantize it to a `.scl` scale, OR/AND/XOR the gates, sum/average/scale the velocity, with optional sample and hold on the combined gate |
 
-To combine sequencers, set each one to Add mode on the same Gate, Pitch, and Velocity Out busses with Scale On off, then place Seq Mix after them. Its In and Out busses default to 14, 15, and 16 in Replace mode, so the summed voltages are consumed in place. Choose `Sum` or `Average` for pitch, a `Gate Op` of OR, AND, or XOR, and `Sum`, `Average`, or `Scale` for velocity. Set `Sources` to the number of sequencers feeding the busses, pick a Root Note and Scale File, and turn on `S&H` to update pitch and velocity only on the mixed gate.
+To combine sequencers, add Seq Mix with its `Channels` specification set to the number of sequencers, give each sequencer its own Gate, Pitch, and Velocity Out busses with Scale On off (the channel defaults step by three: 14/15/16, 17/18/19, and so on), then place Seq Mix after them. It writes the combined gate, pitch, and velocity to busses 14, 15, and 16 in Replace mode. Choose `Sum` or `Average` for pitch, a `Gate Op` of OR, AND, or XOR, and `Sum`, `Average`, or `Scale` for velocity. Pick a Root Note and Scale File, and turn on `S&H` to update pitch and velocity only on the combined gate.
 
 ## Algorithm Entries
 
@@ -141,8 +141,8 @@ scale/
   ScaleLoader.cpp/h       Shared .scl card/request lifecycle
 mix/
   MixQuantizer.cpp/h      Sum/average a pitch voltage and quantize it
-  BusMixers.cpp/h         Boolean gate combiner and velocity sum/average/scale
-  nt_seq_mix.cpp/h        Seq Mix algorithm (pitch, gate, velocity stages, S&H)
+  BusMixers.cpp/h         Per-channel boolean gate combiner and velocity sum/average/scale
+  nt_seq_mix.cpp/h        Seq Mix algorithm (Channels spec, per-channel inputs, S&H)
 clock/
   ClockProcessor.cpp/h    Clock divider
 common/

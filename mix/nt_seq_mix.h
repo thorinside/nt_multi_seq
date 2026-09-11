@@ -6,29 +6,42 @@
 #include "mix/BusMixers.h"
 #include "scale/ScaleLoader.h"
 
-// Parameter indices for Seq Mix. Released indices are fixed; append only.
+// Seq Mix takes a "Channels" specification (1..kMaxMixChannels). Each channel
+// has its own Gate In, Pitch In, and Velocity In; the shared parameters come
+// first so their indices do not move with the channel count.
+static constexpr int kMaxMixChannels = 8;
+
 enum MixParam {
-    kMixParamPitchIn = 0,
-    kMixParamPitchOut,
+    kMixParamPitchOut = 0,
     kMixParamPitchOutMode,
     kMixParamMode,
-    kMixParamSources,
     kMixParamScaleOn,
     kMixParamRootNote,
     kMixParamScaleFile,
-    // v1.3.0
-    kMixParamGateIn,
+    kMixParamSampleHold,
     kMixParamGateOut,
     kMixParamGateOutMode,
     kMixParamGateOp,
-    kMixParamVelIn,
     kMixParamVelOut,
     kMixParamVelOutMode,
     kMixParamVelMode,
     kMixParamVelScale,
-    kMixParamSampleHold,
-    kNumMixParams
+    kNumMixSharedParams
 };
+
+enum MixChannelParam {
+    kMixChanGateIn = 0,
+    kMixChanPitchIn,
+    kMixChanVelIn,
+    kNumMixChannelParams
+};
+
+static constexpr int kMaxMixParams = kNumMixSharedParams + kNumMixChannelParams * kMaxMixChannels;
+
+inline int mixChannelParam(int channel, int which)
+{
+    return kNumMixSharedParams + channel * kNumMixChannelParams + which;
+}
 
 enum MixMode {
     kMixSum = 0,
@@ -54,22 +67,26 @@ enum MixPage {
     kMixPagePitch = 0,
     kMixPageGate,
     kMixPageVelocity,
-    kNumMixPages
+    kNumMixSharedPages
 };
 
 struct NtSeqMix : public _NT_algorithm {
     NtSeqMix() {}
     ~NtSeqMix() {}
 
-    _NT_parameter paramDefs[kNumMixParams];
+    int channels;
+
+    _NT_parameter paramDefs[kMaxMixParams];
+    char channelParamNames[kMaxMixChannels][kNumMixChannelParams][16];
+    char channelPageNames[kMaxMixChannels][6];
     _NT_parameterPages pagesDef;
-    _NT_parameterPage pageDefs[kNumMixPages];
-    uint8_t pageIndices[kNumMixParams];
+    _NT_parameterPage pageDefs[kNumMixSharedPages + kMaxMixChannels];
+    uint8_t channelPageIndices[kMaxMixChannels][kNumMixChannelParams];
 
     MixQuantizer mixer;
     ScaleLoader scale;
 
-    // Cache: quantization only reruns when the input voltage or settings change.
+    // Cache: quantization only reruns when the summed pitch or settings change.
     float lastInput;
     float lastOutput;
     int lastMode;
@@ -78,7 +95,7 @@ struct NtSeqMix : public _NT_algorithm {
     const ScaleQuantizer* lastScale;
     bool cacheValid;
 
-    // Sample and hold of pitch and velocity, clocked by the mixed gate.
+    // Sample and hold of pitch and velocity, clocked by the combined gate.
     float heldPitch;
     float heldVelocity;
     bool gateHigh;
