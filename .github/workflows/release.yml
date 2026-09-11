@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -27,7 +27,7 @@ jobs:
         run: make hardware
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nt_seq-plugin
           path: plugins/nt_seq.o
@@ -39,12 +39,12 @@ jobs:
 
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: nt_seq-plugin
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: nt_seq.o
           generate_release_notes: true
