@@ -15,6 +15,14 @@ The single `nt_seq.o` binary exposes six independent algorithms. Each algorithm 
 | [Seq Ferro](docs/ferromagnetic.md) | Tape-loop chord builder with layered melody, loop trigger, and record gate roles |
 | Seq Quantum | Hierarchical generative sequencer with motif, transformation, and large-form cycles |
 
+## Utilities
+
+| Algorithm | Description |
+|-----------|-------------|
+| Seq Mix | Sums or averages a pitch bus shared by several sequencers, then quantizes the result to a `.scl` scale |
+
+To combine sequencers, set each one to Add mode on the same Pitch Out bus with Scale On off, then place Seq Mix after them. Its Pitch In and Pitch Out both default to bus 15 in Replace mode, so the summed voltage is consumed in place. Choose `Sum` or `Average`, set `Sources` to the number of sequencers feeding the bus, and pick a Root Note and Scale File.
+
 ## Algorithm Entries
 
 The plugin follows the disting NT multi-factory pattern used by the official SDK and community plugins such as NerdRoger's Directional Sequencer. Loading `nt_seq.o` makes these entries available in the algorithm browser:
@@ -27,6 +35,7 @@ The plugin follows the disting NT multi-factory pattern used by the official SDK
 | `Seq Markov` | `NsMk` |
 | `Seq Ferro` | `NsFe` |
 | `Seq Quantum` | `NsQu` |
+| `Seq Mix` | `NsMx` |
 
 Every factory has zero specifications. Selecting an algorithm adds one instance immediately.
 
@@ -114,7 +123,7 @@ make all
 
 ```
 nt_seq.h                  Core declarations, enums, NtSeq struct
-nt_seq.cpp                Plugin entry point and six factories
+nt_seq.cpp                Plugin entry point and seven factories
 nt_seq_construct.cpp      Fixed engine, parameter, and page construction
 nt_seq_step.cpp           Audio-rate processing, clock/gate/CV/MIDI output
 nt_seq_draw.cpp           Engine display and hardware controls
@@ -129,6 +138,9 @@ engines/
   QuantumEngine.cpp/h     Hierarchical generative sequencer
 scale/
   ScaleQuantizer.cpp/h    .scl microtuning support
+mix/
+  MixQuantizer.cpp/h      Sum/average a pitch voltage and quantize it
+  nt_seq_mix.cpp/h        Seq Mix algorithm (bus in, mix, quantize, bus out)
 clock/
   ClockProcessor.cpp/h    Clock divider
 tests/
@@ -139,6 +151,7 @@ tests/
   test_soma_engine.cpp    Unit tests for Soma engine
   test_sift_engine.cpp    Unit tests for Seq Sift
   test_markov_engine.cpp  Unit tests for Markov engine
+  test_mix_quantizer.cpp  Unit tests for MixQuantizer
   test_factories.cpp      Factory, fixed-page, SRAM, and CV routing integration tests
 ```
 

@@ -24,7 +24,9 @@ SOURCES = \
 	engines/SeqMarkovEngine.cpp \
 	engines/ThorpEngine.cpp \
 	engines/FerromagneticEngine.cpp \
-	engines/QuantumEngine.cpp
+	engines/QuantumEngine.cpp \
+	mix/MixQuantizer.cpp \
+	mix/nt_seq_mix.cpp
 
 # Include paths
 INCLUDES = \
@@ -91,6 +93,9 @@ $(BUILD_DIR)/%.o: scale/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: clock/%.cpp | $(BUILD_DIR)
 	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
+$(BUILD_DIR)/%.o: mix/%.cpp | $(BUILD_DIR)
+	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
+
 $(PLUGINS_DIR)/$(PROJECT).o: $(OBJS) | $(PLUGINS_DIR)
 	$(CXX_ARM) -r $(OBJS) -o $@
 	@echo "Hardware build complete: $@"
@@ -128,6 +133,7 @@ UNIT_TESTS = \
 	$(BUILD_DIR)/test_markov_engine \
 	$(BUILD_DIR)/test_ferro_engine \
 	$(BUILD_DIR)/test_quantum_engine \
+	$(BUILD_DIR)/test_mix_quantizer \
 	$(BUILD_DIR)/test_factories
 
 unit-test: $(UNIT_TESTS)
@@ -157,8 +163,11 @@ $(BUILD_DIR)/test_ferro_engine: tests/test_ferro_engine.cpp tests/nt_stubs.h eng
 $(BUILD_DIR)/test_quantum_engine: tests/test_quantum_engine.cpp tests/nt_stubs.h engines/QuantumEngine.cpp engines/QuantumEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_quantum_engine.cpp -lm -o $@
 
+$(BUILD_DIR)/test_mix_quantizer: tests/test_mix_quantizer.cpp mix/MixQuantizer.cpp mix/MixQuantizer.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_mix_quantizer.cpp mix/MixQuantizer.cpp scale/ScaleQuantizer.cpp -lm -o $@
+
 $(BUILD_DIR)/test_factories: tests/test_factories.cpp $(PLUGINS_DIR)/$(PROJECT).$(DYLIB_EXT) | $(BUILD_DIR)
-	$(CXX_TEST) $(CXXFLAGS_UNIT) -I$(DISTINGNT_API)/include tests/test_factories.cpp -ldl -o $@
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_factories.cpp -ldl -o $@
 
 # Clean build artifacts
 clean:

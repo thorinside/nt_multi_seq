@@ -1,5 +1,6 @@
 #include "nt_seq.h"
 #include "engines/ThorpEngine.h"
+#include "mix/nt_seq_mix.h"
 #include <new>
 #include <distingnt/serialisation.h>
 
@@ -127,6 +128,7 @@ static const _NT_factory* const factories[] = {
     &markovFactory,
     &ferroFactory,
     &quantumFactory,
+    &seqMixFactory,
 };
 
 extern "C" uintptr_t pluginEntry(_NT_selector selector, uint32_t data)

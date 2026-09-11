@@ -9,6 +9,7 @@
 #include "../engines/SeqMarkovEngine.h"
 #include "../engines/FerromagneticEngine.h"
 #include "../engines/QuantumEngine.h"
+#include "../mix/nt_seq_mix.h"
 
 static int failures = 0;
 static int tests = 0;
@@ -65,8 +66,8 @@ int main()
 
     CHECK(entry(kNT_selector_version, 0) == kNT_apiVersionCurrent,
         "plugin reports current API version");
-    CHECK(entry(kNT_selector_numFactories, 0) == 6,
-        "plugin exposes six fixed-engine factories");
+    CHECK(entry(kNT_selector_numFactories, 0) == 7,
+        "plugin exposes six fixed-engine factories plus Seq Mix");
 
     static const char* const expectedNames[] = {
         "Seq Thorp", "Seq Soma", "Seq Sift", "Seq Markov", "Seq Ferro", "Seq Quantum"
@@ -213,7 +214,72 @@ int main()
         delete[] sram;
     }
 
-    CHECK(entry(kNT_selector_factoryInfo, 6) == 0,
+    // --- Seq Mix: sums or averages a shared pitch bus and quantizes it ---
+    {
+        const _NT_factory* factory = reinterpret_cast<const _NT_factory*>(
+            entry(kNT_selector_factoryInfo, 6));
+        CHECK(factory != nullptr, "factoryInfo returns the Seq Mix factory");
+        if (factory) {
+            CHECK(strcmp(factory->name, "Seq Mix") == 0, "seventh factory is Seq Mix");
+            CHECK(factory->guid == NT_MULTICHAR('N', 's', 'M', 'x'), "Seq Mix GUID is NsMx");
+            for (uint32_t other = 0; other < 6; ++other) {
+                const _NT_factory* prior = reinterpret_cast<const _NT_factory*>(
+                    entry(kNT_selector_factoryInfo, other));
+                CHECK(factory->guid != prior->guid, "Seq Mix GUID is unique");
+            }
+
+            _NT_algorithmRequirements req = {};
+            factory->calculateRequirements(req, nullptr);
+            CHECK(req.numParameters == kNumMixParams, "Seq Mix parameter count");
+            CHECK(req.sram == sizeof(NtSeqMix), "Seq Mix reserves exactly its state");
+
+            uint8_t* sram = new uint8_t[req.sram];
+            _NT_algorithmMemoryPtrs memory = { sram, nullptr, nullptr, nullptr };
+            _NT_algorithm* algorithm = factory->construct(memory, req, nullptr);
+            CHECK(algorithm != nullptr, "Seq Mix constructs");
+            if (algorithm) {
+                int16_t values[kNumMixParams] = {};
+                for (uint32_t param = 0; param < req.numParameters; ++param)
+                    values[param] = algorithm->parameters[param].def;
+                algorithm->v = values;
+                algorithm->vIncludingCommon = values;
+
+                CHECK(values[kMixParamPitchIn] == 15, "Seq Mix reads the default sequencer pitch bus");
+                CHECK(values[kMixParamPitchOut] == 15, "Seq Mix writes back to the same bus by default");
+                CHECK(values[kMixParamPitchOutMode] == 1, "Seq Mix defaults to Replace so the sum is consumed");
+
+                // Two sequencers added 0.6 V each onto bus 15; average and quantize
+                // without a scale loaded (no SD card) leaves 0.6 V untouched.
+                values[kMixParamMode] = kMixAverage;
+                values[kMixParamSources] = 2;
+                values[kMixParamScaleOn] = 0;
+                float busFrames[kNT_lastBus * 4] = {};
+                for (int frame = 0; frame < 4; ++frame)
+                    busFrames[(15 - 1) * 4 + frame] = 1.2f;
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame)
+                    CHECK(busFrames[(15 - 1) * 4 + frame] == 0.6f,
+                        "average mode halves a two-source sum in place");
+
+                // Sum mode to a different bus in Add mode leaves the input bus alone.
+                values[kMixParamMode] = kMixSum;
+                values[kMixParamPitchOut] = 16;
+                values[kMixParamPitchOutMode] = 0;
+                for (int frame = 0; frame < 4; ++frame) {
+                    busFrames[(15 - 1) * 4 + frame] = 1.2f;
+                    busFrames[(16 - 1) * 4 + frame] = 1.0f;
+                }
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame) {
+                    CHECK(busFrames[(15 - 1) * 4 + frame] == 1.2f, "input bus is untouched");
+                    CHECK(busFrames[(16 - 1) * 4 + frame] == 2.2f, "add mode sums onto the output bus");
+                }
+            }
+            delete[] sram;
+        }
+    }
+
+    CHECK(entry(kNT_selector_factoryInfo, 7) == 0,
         "factoryInfo rejects out-of-range indices");
 
     dlclose(handle);

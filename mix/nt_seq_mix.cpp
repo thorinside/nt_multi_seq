@@ -1,0 +1,220 @@
+#include "mix/nt_seq_mix.h"
+#include <new>
+#include <string.h>
+
+static const char* const mixModeStrings[] = { "Sum", "Average", nullptr };
+static const char* const mixOffOnStrings[] = { "Off", "On", nullptr };
+static const char* const mixRootNoteNames[] = {
+    "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
+};
+
+static const _NT_parameter mixParams[] = {
+    NT_PARAMETER_CV_INPUT("Pitch In", 0, 15)
+    NT_PARAMETER_CV_OUTPUT("Pitch Out", 0, 15)
+    { .name = "Pitch Out mode", .min = 0, .max = 1, .def = 1, .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Mix", .min = 0, .max = kNumMixModes - 1, .def = kMixSum, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = mixModeStrings },
+    { .name = "Sources", .min = 1, .max = 8, .def = 2, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = mixOffOnStrings },
+    { .name = "Root Note", .min = 0, .max = 11, .def = 0, .unit = kNT_unitHasStrings, .scaling = 0, .enumStrings = nullptr },
+    { .name = "Scale File", .min = 0, .max = 32767, .def = 0, .unit = kNT_unitConfirm, .scaling = 0, .enumStrings = nullptr },
+};
+static_assert(ARRAY_SIZE(mixParams) == kNumMixParams, "Mix param count mismatch");
+
+static void mixSclCallback(void* callbackData)
+{
+    NtSeqMix* alg = static_cast<NtSeqMix*>(callbackData);
+    alg->awaitingCallback = false;
+    alg->scaleDirty = true;
+}
+
+static void mixCalculateRequirements(_NT_algorithmRequirements& req, const int32_t* specifications)
+{
+    (void)specifications;
+    req.numParameters = kNumMixParams;
+    req.sram = sizeof(NtSeqMix);
+    req.dram = 0;
+    req.dtc = 0;
+    req.itc = 0;
+}
+
+static _NT_algorithm* mixConstruct(
+    const _NT_algorithmMemoryPtrs& ptrs,
+    const _NT_algorithmRequirements& req,
+    const int32_t* specifications)
+{
+    (void)req;
+    (void)specifications;
+
+    NtSeqMix* alg = new (ptrs.sram) NtSeqMix();
+    alg->cardMounted = false;
+    alg->awaitingCallback = false;
+    alg->scaleDirty = false;
+    alg->cacheValid = false;
+    alg->lastInput = 0.0f;
+    alg->lastOutput = 0.0f;
+    alg->lastMode = 0;
+    alg->lastSources = 0;
+    alg->lastRoot = 0;
+    alg->lastScale = nullptr;
+    alg->sclName[0] = 0;
+    alg->sclDescription[0] = 0;
+
+    memcpy(alg->paramDefs, mixParams, sizeof(mixParams));
+    for (int i = 0; i < kNumMixParams; ++i)
+        alg->pageIndices[i] = static_cast<uint8_t>(i);
+    alg->pageDef = {
+        .name = "Mix",
+        .numParams = kNumMixParams,
+        .group = 1,
+        .unused = {0, 0},
+        .params = alg->pageIndices
+    };
+    alg->pagesDef.numPages = 1;
+    alg->pagesDef.pages = &alg->pageDef;
+    alg->parameters = alg->paramDefs;
+    alg->parameterPages = &alg->pagesDef;
+
+    alg->sclRequest.notes = alg->sclNotes;
+    alg->sclRequest.maxNotes = kMixMaxSclNotes;
+    alg->sclRequest.nameBuffer = alg->sclName;
+    alg->sclRequest.nameBufferSize = sizeof(alg->sclName);
+    alg->sclRequest.descriptionBuffer = alg->sclDescription;
+    alg->sclRequest.descriptionBufferSize = sizeof(alg->sclDescription);
+    alg->sclRequest.callback = mixSclCallback;
+    alg->sclRequest.callbackData = alg;
+
+    return static_cast<_NT_algorithm*>(alg);
+}
+
+static void mixParameterChanged(_NT_algorithm* self, int p)
+{
+    NtSeqMix* alg = static_cast<NtSeqMix*>(self);
+
+    if (p == kMixParamScaleFile && !alg->awaitingCallback) {
+        alg->sclRequest.index = alg->v[kMixParamScaleFile];
+        alg->awaitingCallback = true;
+        if (!NT_readScl(alg->sclRequest))
+            alg->awaitingCallback = false;
+    }
+}
+
+static void mixStep(_NT_algorithm* self, float* busFrames, int numFramesBy4)
+{
+    NtSeqMix* alg = static_cast<NtSeqMix*>(self);
+    int numFrames = numFramesBy4 * 4;
+
+    bool cardMounted = NT_isSdCardMounted();
+    if (alg->cardMounted != cardMounted) {
+        alg->cardMounted = cardMounted;
+        if (cardMounted) {
+            int numScales = NT_getNumScl();
+            if (numScales > 0) {
+                alg->paramDefs[kMixParamScaleFile].max = numScales - 1;
+                int algIdx = NT_algorithmIndex(self);
+                if (algIdx >= 0)
+                    NT_updateParameterDefinition(algIdx, kMixParamScaleFile);
+            }
+            mixParameterChanged(self, kMixParamScaleFile);
+        } else {
+            alg->awaitingCallback = false;
+        }
+    }
+
+    if (alg->scaleDirty) {
+        if (!alg->sclRequest.error && alg->sclRequest.numNotes > 0)
+            alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
+        alg->scaleDirty = false;
+        alg->cacheValid = false;
+    }
+
+    int inBus = alg->v[kMixParamPitchIn];
+    int outBus = alg->v[kMixParamPitchOut];
+    if (inBus <= 0 || outBus <= 0)
+        return;
+
+    const float* in = busFrames + (inBus - 1) * numFrames;
+    float* out = busFrames + (outBus - 1) * numFrames;
+    bool replace = alg->v[kMixParamPitchOutMode] != 0;
+
+    MixQuantizer::Mode mode = alg->v[kMixParamMode] == kMixAverage
+        ? MixQuantizer::kAverage
+        : MixQuantizer::kSum;
+    int sources = alg->v[kMixParamSources];
+    bool scaleOn = alg->v[kMixParamScaleOn] != 0;
+    const ScaleQuantizer* scale = scaleOn && alg->scaleQuantizer.isLoaded()
+        ? &alg->scaleQuantizer
+        : nullptr;
+    int root = alg->v[kMixParamRootNote];
+
+    if (mode != alg->lastMode || sources != alg->lastSources
+        || root != alg->lastRoot || scale != alg->lastScale) {
+        alg->lastMode = mode;
+        alg->lastSources = sources;
+        alg->lastRoot = root;
+        alg->lastScale = scale;
+        alg->cacheValid = false;
+    }
+
+    for (int frame = 0; frame < numFrames; ++frame) {
+        float input = in[frame];
+        if (!alg->cacheValid || input != alg->lastInput) {
+            alg->lastInput = input;
+            alg->lastOutput = alg->mixer.process(input, mode, sources, scale, root);
+            alg->cacheValid = true;
+        }
+        if (replace)
+            out[frame] = alg->lastOutput;
+        else
+            out[frame] += alg->lastOutput;
+    }
+}
+
+static int mixParameterString(_NT_algorithm* self, int p, int v, char* buff)
+{
+    (void)self;
+
+    if (p == kMixParamScaleFile) {
+        _NT_sclInfo info;
+        NT_getSclInfo(v, info);
+        if (info.name) {
+            strncpy(buff, info.name, kNT_parameterStringSize - 1);
+            buff[kNT_parameterStringSize - 1] = 0;
+            return strlen(buff);
+        }
+        return 0;
+    }
+
+    if (p == kMixParamRootNote && v >= 0 && v < 12) {
+        strncpy(buff, mixRootNoteNames[v], kNT_parameterStringSize - 1);
+        buff[kNT_parameterStringSize - 1] = 0;
+        return strlen(buff);
+    }
+
+    return 0;
+}
+
+const _NT_factory seqMixFactory = {
+    .guid = NT_MULTICHAR('N', 's', 'M', 'x'),
+    .name = "Seq Mix",
+    .description = "Sum or average sequencer pitch busses, then quantize",
+    .numSpecifications = 0,
+    .specifications = nullptr,
+    .calculateStaticRequirements = nullptr,
+    .initialise = nullptr,
+    .calculateRequirements = mixCalculateRequirements,
+    .construct = mixConstruct,
+    .parameterChanged = mixParameterChanged,
+    .step = mixStep,
+    .draw = nullptr,
+    .midiRealtime = nullptr,
+    .midiMessage = nullptr,
+    .tags = kNT_tagUtility,
+    .hasCustomUi = nullptr,
+    .customUi = nullptr,
+    .setupUi = nullptr,
+    .serialise = nullptr,
+    .deserialise = nullptr,
+    .midiSysEx = nullptr,
+    .parameterUiPrefix = nullptr,
+    .parameterString = mixParameterString,
+};
