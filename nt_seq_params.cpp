@@ -43,12 +43,7 @@ void parameterChanged(_NT_algorithm* self, int p)
     }
 
     if (p == kParamScaleFile) {
-        if (!alg->awaitingCallback) {
-            alg->sclRequest.index = alg->v[kParamScaleFile];
-            alg->awaitingCallback = true;
-            if (!NT_readScl(alg->sclRequest))
-                alg->awaitingCallback = false;
-        }
+        alg->scale.requestScale(alg->v[kParamScaleFile]);
         return;
     }
 

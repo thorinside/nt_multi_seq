@@ -20,13 +20,6 @@ static const _NT_parameter mixParams[] = {
 };
 static_assert(ARRAY_SIZE(mixParams) == kNumMixParams, "Mix param count mismatch");
 
-static void mixSclCallback(void* callbackData)
-{
-    NtSeqMix* alg = static_cast<NtSeqMix*>(callbackData);
-    alg->awaitingCallback = false;
-    alg->scaleDirty = true;
-}
-
 static void mixCalculateRequirements(_NT_algorithmRequirements& req, const int32_t* specifications)
 {
     (void)specifications;
@@ -46,9 +39,7 @@ static _NT_algorithm* mixConstruct(
     (void)specifications;
 
     NtSeqMix* alg = new (ptrs.sram) NtSeqMix();
-    alg->cardMounted = false;
-    alg->awaitingCallback = false;
-    alg->scaleDirty = false;
+    alg->scale.init();
     alg->cacheValid = false;
     alg->lastInput = 0.0f;
     alg->lastOutput = 0.0f;
@@ -56,8 +47,6 @@ static _NT_algorithm* mixConstruct(
     alg->lastSources = 0;
     alg->lastRoot = 0;
     alg->lastScale = nullptr;
-    alg->sclName[0] = 0;
-    alg->sclDescription[0] = 0;
 
     memcpy(alg->paramDefs, mixParams, sizeof(mixParams));
     for (int i = 0; i < kNumMixParams; ++i)
@@ -74,15 +63,6 @@ static _NT_algorithm* mixConstruct(
     alg->parameters = alg->paramDefs;
     alg->parameterPages = &alg->pagesDef;
 
-    alg->sclRequest.notes = alg->sclNotes;
-    alg->sclRequest.maxNotes = kMixMaxSclNotes;
-    alg->sclRequest.nameBuffer = alg->sclName;
-    alg->sclRequest.nameBufferSize = sizeof(alg->sclName);
-    alg->sclRequest.descriptionBuffer = alg->sclDescription;
-    alg->sclRequest.descriptionBufferSize = sizeof(alg->sclDescription);
-    alg->sclRequest.callback = mixSclCallback;
-    alg->sclRequest.callbackData = alg;
-
     return static_cast<_NT_algorithm*>(alg);
 }
 
@@ -90,12 +70,8 @@ static void mixParameterChanged(_NT_algorithm* self, int p)
 {
     NtSeqMix* alg = static_cast<NtSeqMix*>(self);
 
-    if (p == kMixParamScaleFile && !alg->awaitingCallback) {
-        alg->sclRequest.index = alg->v[kMixParamScaleFile];
-        alg->awaitingCallback = true;
-        if (!NT_readScl(alg->sclRequest))
-            alg->awaitingCallback = false;
-    }
+    if (p == kMixParamScaleFile)
+        alg->scale.requestScale(alg->v[kMixParamScaleFile]);
 }
 
 static void mixStep(_NT_algorithm* self, float* busFrames, int numFramesBy4)
@@ -103,29 +79,8 @@ static void mixStep(_NT_algorithm* self, float* busFrames, int numFramesBy4)
     NtSeqMix* alg = static_cast<NtSeqMix*>(self);
     int numFrames = numFramesBy4 * 4;
 
-    bool cardMounted = NT_isSdCardMounted();
-    if (alg->cardMounted != cardMounted) {
-        alg->cardMounted = cardMounted;
-        if (cardMounted) {
-            int numScales = NT_getNumScl();
-            if (numScales > 0) {
-                alg->paramDefs[kMixParamScaleFile].max = numScales - 1;
-                int algIdx = NT_algorithmIndex(self);
-                if (algIdx >= 0)
-                    NT_updateParameterDefinition(algIdx, kMixParamScaleFile);
-            }
-            mixParameterChanged(self, kMixParamScaleFile);
-        } else {
-            alg->awaitingCallback = false;
-        }
-    }
-
-    if (alg->scaleDirty) {
-        if (!alg->sclRequest.error && alg->sclRequest.numNotes > 0)
-            alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
-        alg->scaleDirty = false;
+    if (alg->scale.poll(self, alg->paramDefs[kMixParamScaleFile], kMixParamScaleFile))
         alg->cacheValid = false;
-    }
 
     int inBus = alg->v[kMixParamPitchIn];
     int outBus = alg->v[kMixParamPitchOut];
@@ -141,8 +96,8 @@ static void mixStep(_NT_algorithm* self, float* busFrames, int numFramesBy4)
         : MixQuantizer::kSum;
     int sources = alg->v[kMixParamSources];
     bool scaleOn = alg->v[kMixParamScaleOn] != 0;
-    const ScaleQuantizer* scale = scaleOn && alg->scaleQuantizer.isLoaded()
-        ? &alg->scaleQuantizer
+    const ScaleQuantizer* scale = scaleOn && alg->scale.quantizer.isLoaded()
+        ? &alg->scale.quantizer
         : nullptr;
     int root = alg->v[kMixParamRootNote];
 

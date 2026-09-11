@@ -6,7 +6,7 @@
 #include <distingnt/microtuning.h>
 #include <distingnt/wav.h>
 #include "engines/SequencerEngine.h"
-#include "scale/ScaleQuantizer.h"
+#include "scale/ScaleLoader.h"
 #include "clock/ClockProcessor.h"
 
 // Maximum parameters any single engine can define
@@ -14,9 +14,6 @@ constexpr int kMaxEngineParams = 32;
 
 // Every fixed engine has exactly three pages.
 constexpr int kNumPages = 3;
-
-// Maximum .scl notes
-constexpr int kMaxSclNotes = 128;
 
 // --- Global parameter indices ---
 enum GlobalParam {
@@ -161,14 +158,7 @@ struct NtSeq : public _NT_algorithm {
     SequencerState seq;
 
     // Scale system
-    ScaleQuantizer scaleQuantizer;
-    _NT_sclRequest sclRequest;
-    _NT_sclNote sclNotes[kMaxSclNotes];
-    char sclName[22];
-    char sclDescription[44];
-    bool cardMounted;
-    bool awaitingCallback;
-    bool scaleDirty;
+    ScaleLoader scale;
 
     // Warp LUT cache (precomputed degree-to-warped-degree mapping)
     bool warpDirty;

@@ -138,6 +138,7 @@ engines/
   QuantumEngine.cpp/h     Hierarchical generative sequencer
 scale/
   ScaleQuantizer.cpp/h    .scl microtuning support
+  ScaleLoader.cpp/h       Shared .scl card/request lifecycle
 mix/
   MixQuantizer.cpp/h      Sum/average a pitch voltage and quantize it
   nt_seq_mix.cpp/h        Seq Mix algorithm (bus in, mix, quantize, bus out)

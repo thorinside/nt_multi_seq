@@ -22,40 +22,18 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
     alg->initDone = true;
     int numFrames = numFramesBy4 * 4;
 
-    bool cardMounted = NT_isSdCardMounted();
-    if (alg->cardMounted != cardMounted) {
-        alg->cardMounted = cardMounted;
-        if (cardMounted) {
-            int numScales = NT_getNumScl();
-            if (numScales > 0) {
-                alg->paramDefs[kParamScaleFile].max = numScales - 1;
-                int algIdx = NT_algorithmIndex(self);
-                if (algIdx >= 0)
-                    NT_updateParameterDefinition(algIdx, kParamScaleFile);
-            }
-            parameterChanged(self, kParamScaleFile);
-        } else {
-            alg->awaitingCallback = false;
-        }
-    }
-
-    if (alg->scaleDirty) {
-        if (!alg->sclRequest.error && alg->sclRequest.numNotes > 0) {
-            alg->scaleQuantizer.loadScale(alg->sclNotes, alg->sclRequest.numNotes);
-            alg->warpDirty = true;
-        }
-        alg->scaleDirty = false;
-    }
+    if (alg->scale.poll(self, alg->paramDefs[kParamScaleFile], kParamScaleFile))
+        alg->warpDirty = true;
 
     if (alg->warpDirty) {
         alg->warpDirty = false;
         int warpAmount = alg->v[kParamWarpAmount];
-        int numDegrees = static_cast<int>(alg->scaleQuantizer.numNotes());
-        if (warpAmount > 0 && numDegrees > 0 && alg->scaleQuantizer.isLoaded()) {
+        int numDegrees = static_cast<int>(alg->scale.quantizer.numNotes());
+        if (warpAmount > 0 && numDegrees > 0 && alg->scale.quantizer.isLoaded()) {
             int weightMode = alg->v[kParamNoteWeight];
             float characteristicWeight = 1.0f + static_cast<float>(warpAmount) / 100.0f * 4.0f;
             float weights[128];
-            alg->scaleQuantizer.computeNoteWeights(
+            alg->scale.quantizer.computeNoteWeights(
                 weights,
                 numDegrees,
                 static_cast<ScaleQuantizer::WeightMode>(weightMode),
@@ -162,8 +140,8 @@ void step(_NT_algorithm* self, float* busFrames, int numFramesBy4)
             }
 
             bool scaleEnabled = alg->v[base + kRouteScaleEnable] != 0;
-            const ScaleQuantizer* scale = scaleEnabled && alg->scaleQuantizer.isLoaded()
-                ? &alg->scaleQuantizer
+            const ScaleQuantizer* scale = scaleEnabled && alg->scale.quantizer.isLoaded()
+                ? &alg->scale.quantizer
                 : nullptr;
             EngineOutput output = seq.engine->clockTick(scale);
 

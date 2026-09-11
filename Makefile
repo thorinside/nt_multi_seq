@@ -17,6 +17,7 @@ SOURCES = \
 	nt_seq_draw.cpp \
 	nt_seq_params.cpp \
 	scale/ScaleQuantizer.cpp \
+	scale/ScaleLoader.cpp \
 	clock/ClockProcessor.cpp \
 	engines/FocusData.cpp \
 	engines/SomaEngine.cpp \

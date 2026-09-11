@@ -145,14 +145,14 @@ static void drawEngine(NtSeq* alg)
         const char* rn = rootNoteNames[rootNote];
         while (*rn) buf[len++] = *rn++;
         len += NT_intToString(buf + len, octave);
-        if (alg->sclName[0] != 0) {
+        if (alg->scale.name[0] != 0) {
             buf[len++] = ' ';
-            const char* sn = alg->sclName;
+            const char* sn = alg->scale.name;
             while (*sn && len < 30) buf[len++] = *sn++;
-            if (alg->scaleQuantizer.isLoaded()) {
+            if (alg->scale.quantizer.isLoaded()) {
                 buf[len++] = ' ';
                 buf[len++] = '(';
-                len += NT_intToString(buf + len, (int32_t)alg->scaleQuantizer.numNotes());
+                len += NT_intToString(buf + len, (int32_t)alg->scale.quantizer.numNotes());
                 buf[len++] = ')';
             }
         }

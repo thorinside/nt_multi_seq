@@ -58,13 +58,6 @@ enum PageGroup : uint8_t {
     kPageGroupEngine
 };
 
-static void sclCallback(void* callbackData)
-{
-    NtSeq* alg = static_cast<NtSeq*>(callbackData);
-    alg->awaitingCallback = false;
-    alg->scaleDirty = true;
-}
-
 static int engineParameterCount(EngineType type)
 {
     switch (type) {
@@ -126,14 +119,10 @@ _NT_algorithm* constructForEngine(
 
     NtSeq* alg = new (ptrs.sram) NtSeq();
     alg->sampleRate = NT_globals.sampleRate;
-    alg->cardMounted = false;
-    alg->awaitingCallback = false;
-    alg->scaleDirty = false;
+    alg->scale.init();
     alg->warpDirty = false;
     alg->cachedWarpNumNotes = 0;
     alg->initDone = false;
-    alg->sclName[0] = 0;
-    alg->sclDescription[0] = 0;
 
     uintptr_t engineAddress = reinterpret_cast<uintptr_t>(ptrs.sram + sizeof(NtSeq));
     engineAddress = (engineAddress + 7u) & ~static_cast<uintptr_t>(7u);
@@ -207,15 +196,6 @@ _NT_algorithm* constructForEngine(
     alg->pagesDef.pages = alg->pageDefs;
     alg->parameters = alg->paramDefs;
     alg->parameterPages = &alg->pagesDef;
-
-    alg->sclRequest.notes = alg->sclNotes;
-    alg->sclRequest.maxNotes = kMaxSclNotes;
-    alg->sclRequest.nameBuffer = alg->sclName;
-    alg->sclRequest.nameBufferSize = sizeof(alg->sclName);
-    alg->sclRequest.descriptionBuffer = alg->sclDescription;
-    alg->sclRequest.descriptionBufferSize = sizeof(alg->sclDescription);
-    alg->sclRequest.callback = sclCallback;
-    alg->sclRequest.callbackData = alg;
 
     int algIdx = NT_algorithmIndex(static_cast<const _NT_algorithm*>(alg));
     if (algIdx >= 0) {
