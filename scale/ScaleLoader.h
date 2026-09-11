@@ -22,7 +22,10 @@ struct ScaleLoader {
     bool awaitingCallback;
     bool dirty;
 
-    // Must be called after placement-new, once the object has its final address.
+    ScaleLoader() { init(); }
+
+    // Resets all state and re-points the request at this object. Safe to call
+    // again after construction; the constructor already does so.
     void init();
 
     // Call from parameterChanged when the Scale File parameter changes.

@@ -144,6 +144,8 @@ mix/
   nt_seq_mix.cpp/h        Seq Mix algorithm (bus in, mix, quantize, bus out)
 clock/
   ClockProcessor.cpp/h    Clock divider
+common/
+  ParamStrings.cpp/h      Shared enum strings and parameterString helpers
 tests/
   nt_stubs.h              NT API stubs for standalone engine testing
   test_scale_quantizer.cpp  Unit tests for scale degree weighting modes
