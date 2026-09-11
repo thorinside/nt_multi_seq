@@ -18,6 +18,7 @@ SOURCES = \
 	nt_seq_params.cpp \
 	scale/ScaleQuantizer.cpp \
 	scale/ScaleLoader.cpp \
+	common/ParamStrings.cpp \
 	clock/ClockProcessor.cpp \
 	engines/FocusData.cpp \
 	engines/SomaEngine.cpp \
@@ -95,6 +96,9 @@ $(BUILD_DIR)/%.o: clock/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: mix/%.cpp | $(BUILD_DIR)
 	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
 
+$(BUILD_DIR)/%.o: common/%.cpp | $(BUILD_DIR)
+	$(CXX_ARM) $(CXXFLAGS_ARM) $(DEPFLAGS) $(INCLUDES) -c $< -o $@
+
 # The disting NT loader has a symbol table limit (1024 entries on 1.19 beta).
 # Strip everything the loader does not need and fail the build if we exceed it.
 MAX_SYMBOLS = 1024
@@ -165,8 +169,8 @@ $(BUILD_DIR)/test_soma_engine: tests/test_soma_engine.cpp tests/nt_stubs.h engin
 $(BUILD_DIR)/test_sift_engine: tests/test_sift_engine.cpp tests/nt_stubs.h engines/SiftEngine.cpp engines/SiftEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_sift_engine.cpp -lm -o $@
 
-$(BUILD_DIR)/test_markov_engine: tests/test_markov_engine.cpp tests/nt_stubs.h engines/SeqMarkovEngine.cpp engines/SeqMarkovEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
-	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_markov_engine.cpp -lm -o $@
+$(BUILD_DIR)/test_markov_engine: tests/test_markov_engine.cpp tests/nt_stubs.h engines/SeqMarkovEngine.cpp engines/SeqMarkovEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h common/ParamStrings.cpp | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_markov_engine.cpp common/ParamStrings.cpp -lm -o $@
 
 $(BUILD_DIR)/test_ferro_engine: tests/test_ferro_engine.cpp tests/nt_stubs.h engines/FerromagneticEngine.cpp engines/FerromagneticEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_ferro_engine.cpp -lm -o $@

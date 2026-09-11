@@ -2,10 +2,6 @@
 #include "engines/ThorpEngine.h"
 #include <string.h>
 
-static const char* const rootNoteNames[] = {
-    "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
-};
-
 static void applyRoutingGrayouts(NtSeq* alg, int algIdx)
 {
     if (algIdx < 0)
@@ -112,22 +108,9 @@ int parameterString(_NT_algorithm* self, int p, int v, char* buff)
 {
     (void)self;
 
-    if (p == kParamScaleFile) {
-        _NT_sclInfo info;
-        NT_getSclInfo(v, info);
-        if (info.name) {
-            strncpy(buff, info.name, kNT_parameterStringSize - 1);
-            buff[kNT_parameterStringSize - 1] = 0;
-            return strlen(buff);
-        }
-        return 0;
-    }
-
-    if (p == kParamRootNote && v >= 0 && v < 12) {
-        strncpy(buff, rootNoteNames[v], kNT_parameterStringSize - 1);
-        buff[kNT_parameterStringSize - 1] = 0;
-        return strlen(buff);
-    }
-
+    if (p == kParamScaleFile)
+        return ScaleLoader::parameterString(v, buff);
+    if (p == kParamRootNote)
+        return rootNoteParameterString(v, buff);
     return 0;
 }

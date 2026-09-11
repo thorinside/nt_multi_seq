@@ -32,6 +32,9 @@ struct ScaleLoader {
     // Scale File parameter's range, and loads a newly received scale.
     // Returns true when the quantizer was reloaded this call.
     bool poll(_NT_algorithm* self, _NT_parameter& scaleFileParam, int scaleFileParamIndex);
+
+    // Formats a Scale File parameter value as the .scl name for parameterString().
+    static int parameterString(int v, char* buff);
 };
 
 #endif // SCALE_LOADER_H

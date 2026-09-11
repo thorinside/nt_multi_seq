@@ -7,6 +7,7 @@
 #include <distingnt/wav.h>
 #include "engines/SequencerEngine.h"
 #include "scale/ScaleLoader.h"
+#include "common/ParamStrings.h"
 #include "clock/ClockProcessor.h"
 
 // Maximum parameters any single engine can define
@@ -78,10 +79,6 @@ enum MidiDest {
 // --- Enum string arrays ---
 static const char* const routingStrings[] = {
     "CV", "MIDI", nullptr
-};
-
-static const char* const offOnStrings[] = {
-    "Off", "On", nullptr
 };
 
 static const char* const midiDestStrings[] = {

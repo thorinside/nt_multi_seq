@@ -1,4 +1,5 @@
 #include "scale/ScaleLoader.h"
+#include "common/ParamStrings.h"
 
 static void scaleLoaderCallback(void* callbackData)
 {
@@ -62,4 +63,13 @@ bool ScaleLoader::poll(_NT_algorithm* self, _NT_parameter& scaleFileParam, int s
         return false;
     quantizer.loadScale(notes, request.numNotes);
     return true;
+}
+
+int ScaleLoader::parameterString(int v, char* buff)
+{
+    _NT_sclInfo info;
+    NT_getSclInfo(v, info);
+    if (!info.name)
+        return 0;
+    return copyParameterString(buff, info.name);
 }

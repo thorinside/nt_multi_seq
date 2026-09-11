@@ -7,10 +7,6 @@
 #include "engines/QuantumEngine.h"
 #include <string.h>
 
-static const char* rootNoteNames[] = {
-    "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
-};
-
 // --- Helpers ---
 
 // Format pitch as note name (when scale enabled) or voltage
@@ -25,7 +21,7 @@ static int formatPitch(char* buf, float pitch, bool scaleEnabled, int rootNote, 
         if (midiNote > 127) midiNote = 127;
         int note = midiNote % 12;
         int oct = midiNote / 12 - 1;
-        const char* nn = rootNoteNames[note];
+        const char* nn = kRootNoteNames[note];
         int len = 0;
         while (*nn) buf[len++] = *nn++;
         if (oct < 0) {
@@ -142,7 +138,7 @@ static void drawEngine(NtSeq* alg)
     int octave = alg->v[kParamOctave];
     if (rootNote >= 0 && rootNote < 12) {
         len = 0;
-        const char* rn = rootNoteNames[rootNote];
+        const char* rn = kRootNoteNames[rootNote];
         while (*rn) buf[len++] = *rn++;
         len += NT_intToString(buf + len, octave);
         if (alg->scale.name[0] != 0) {

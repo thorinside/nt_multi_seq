@@ -1,12 +1,9 @@
 #include "mix/nt_seq_mix.h"
+#include "common/ParamStrings.h"
 #include <new>
 #include <string.h>
 
 static const char* const mixModeStrings[] = { "Sum", "Average", nullptr };
-static const char* const mixOffOnStrings[] = { "Off", "On", nullptr };
-static const char* const mixRootNoteNames[] = {
-    "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
-};
 
 static const _NT_parameter mixParams[] = {
     NT_PARAMETER_CV_INPUT("Pitch In", 0, 15)
@@ -14,7 +11,7 @@ static const _NT_parameter mixParams[] = {
     { .name = "Pitch Out mode", .min = 0, .max = 1, .def = 1, .unit = kNT_unitOutputMode, .scaling = 0, .enumStrings = nullptr },
     { .name = "Mix", .min = 0, .max = kNumMixModes - 1, .def = kMixSum, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = mixModeStrings },
     { .name = "Sources", .min = 1, .max = 8, .def = 2, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
-    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = mixOffOnStrings },
+    { .name = "Scale On", .min = 0, .max = 1, .def = 1, .unit = kNT_unitEnum, .scaling = 0, .enumStrings = kOffOnStrings },
     { .name = "Root Note", .min = 0, .max = 11, .def = 0, .unit = kNT_unitHasStrings, .scaling = 0, .enumStrings = nullptr },
     { .name = "Scale File", .min = 0, .max = 32767, .def = 0, .unit = kNT_unitConfirm, .scaling = 0, .enumStrings = nullptr },
 };
@@ -128,23 +125,10 @@ static int mixParameterString(_NT_algorithm* self, int p, int v, char* buff)
 {
     (void)self;
 
-    if (p == kMixParamScaleFile) {
-        _NT_sclInfo info;
-        NT_getSclInfo(v, info);
-        if (info.name) {
-            strncpy(buff, info.name, kNT_parameterStringSize - 1);
-            buff[kNT_parameterStringSize - 1] = 0;
-            return strlen(buff);
-        }
-        return 0;
-    }
-
-    if (p == kMixParamRootNote && v >= 0 && v < 12) {
-        strncpy(buff, mixRootNoteNames[v], kNT_parameterStringSize - 1);
-        buff[kNT_parameterStringSize - 1] = 0;
-        return strlen(buff);
-    }
-
+    if (p == kMixParamScaleFile)
+        return ScaleLoader::parameterString(v, buff);
+    if (p == kMixParamRootNote)
+        return rootNoteParameterString(v, buff);
     return 0;
 }
 

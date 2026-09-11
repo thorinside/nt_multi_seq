@@ -1,4 +1,5 @@
 #include "SeqMarkovEngine.h"
+#include "common/ParamStrings.h"
 #include "../scale/ScaleQuantizer.h"
 #include <math.h>
 
@@ -6,7 +7,6 @@ static const char* const styleStrings[] = {
     "Pop/Rock", "Classical", "Jazz", "Techno",
     "Min Techno", "Mel Techno", "LMD All", "LMD Elec", nullptr
 };
-static const char* const offOnStrings[] = { "Off", "On", nullptr };
 
 static inline int clampInt(int v, int lo, int hi)
 {
@@ -127,8 +127,8 @@ static const _NT_parameter kMarkovParams[] = {
     /* kMarkovRange */ { .name = "Oct Range", .min = 1, .max = 3,              .def = 2,             .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
     /* kMarkovMutation */ { .name = "Mutation",  .min = 0, .max = 100,            .def = 20,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
     /* kMarkovLength */ { .name = "Length",    .min = 1, .max = SeqMarkovEngine::kMaxSteps,      .def = 8,             .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
-    /* kMarkovRandomizeSwitch */ { .name = "Randomize", .min = 0, .max = 1,        .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = offOnStrings },
-    /* kMarkovRegenerateSwitch */ { .name = "Regenerate", .min = 0, .max = 1,      .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = offOnStrings },
+    /* kMarkovRandomizeSwitch */ { .name = "Randomize", .min = 0, .max = 1,        .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kOffOnStrings },
+    /* kMarkovRegenerateSwitch */ { .name = "Regenerate", .min = 0, .max = 1,      .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kOffOnStrings },
 };
 static_assert(ARRAY_SIZE(kMarkovParams) == SeqMarkovEngine::kNumMarkovParams, "Markov param table size mismatch");
 
