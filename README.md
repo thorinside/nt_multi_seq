@@ -19,9 +19,9 @@ The single `nt_seq.o` binary exposes six independent algorithms. Each algorithm 
 
 | Algorithm | Description |
 |-----------|-------------|
-| [Seq Mix](docs/mix.md) | Sums or averages a pitch bus shared by several sequencers, then quantizes the result to a `.scl` scale |
+| [Seq Mix](docs/mix.md) | Combines the pitch, gate, and velocity busses shared by several sequencers: sum or average pitch and quantize it to a `.scl` scale, OR/AND/XOR the gates, sum/average/scale the velocity, with optional sample and hold on the mixed gate |
 
-To combine sequencers, set each one to Add mode on the same Pitch Out bus with Scale On off, then place Seq Mix after them. Its Pitch In and Pitch Out both default to bus 15 in Replace mode, so the summed voltage is consumed in place. Choose `Sum` or `Average`, set `Sources` to the number of sequencers feeding the bus, and pick a Root Note and Scale File.
+To combine sequencers, set each one to Add mode on the same Gate, Pitch, and Velocity Out busses with Scale On off, then place Seq Mix after them. Its In and Out busses default to 14, 15, and 16 in Replace mode, so the summed voltages are consumed in place. Choose `Sum` or `Average` for pitch, a `Gate Op` of OR, AND, or XOR, and `Sum`, `Average`, or `Scale` for velocity. Set `Sources` to the number of sequencers feeding the busses, pick a Root Note and Scale File, and turn on `S&H` to update pitch and velocity only on the mixed gate.
 
 ## Algorithm Entries
 
@@ -141,7 +141,8 @@ scale/
   ScaleLoader.cpp/h       Shared .scl card/request lifecycle
 mix/
   MixQuantizer.cpp/h      Sum/average a pitch voltage and quantize it
-  nt_seq_mix.cpp/h        Seq Mix algorithm (bus in, mix, quantize, bus out)
+  BusMixers.cpp/h         Boolean gate combiner and velocity sum/average/scale
+  nt_seq_mix.cpp/h        Seq Mix algorithm (pitch, gate, velocity stages, S&H)
 clock/
   ClockProcessor.cpp/h    Clock divider
 common/
@@ -155,6 +156,7 @@ tests/
   test_sift_engine.cpp    Unit tests for Seq Sift
   test_markov_engine.cpp  Unit tests for Markov engine
   test_mix_quantizer.cpp  Unit tests for MixQuantizer
+  test_bus_mixers.cpp     Unit tests for GateMixer and VelocityMixer
   test_factories.cpp      Factory, fixed-page, SRAM, and CV routing integration tests
 ```
 

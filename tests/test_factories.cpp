@@ -274,6 +274,138 @@ int main()
                     CHECK(busFrames[(15 - 1) * 4 + frame] == 1.2f, "input bus is untouched");
                     CHECK(busFrames[(16 - 1) * 4 + frame] == 2.2f, "add mode sums onto the output bus");
                 }
+
+                // --- Gate stage: boolean op over the summed gate bus ---
+                CHECK(values[kMixParamGateIn] == 14, "Seq Mix reads the default sequencer gate bus");
+                CHECK(values[kMixParamGateOut] == 14, "Seq Mix writes the gate back to the same bus");
+                CHECK(values[kMixParamGateOutMode] == 1, "gate defaults to Replace");
+                CHECK(values[kMixParamGateOp] == kMixGateOr, "gate op defaults to OR");
+                values[kMixParamPitchOut] = 0;  // pitch stage off; gate must still run
+                for (int frame = 0; frame < 4; ++frame)
+                    busFrames[(14 - 1) * 4 + frame] = 10.0f;  // two gates high
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame)
+                    CHECK(busFrames[(14 - 1) * 4 + frame] == 5.0f, "OR of two high gates is one 5 V gate");
+
+                values[kMixParamGateOp] = kMixGateAnd;
+                for (int frame = 0; frame < 4; ++frame)
+                    busFrames[(14 - 1) * 4 + frame] = 5.0f;  // one of two high
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame)
+                    CHECK(busFrames[(14 - 1) * 4 + frame] == 0.0f, "AND with one of two gates high is low");
+
+                values[kMixParamGateOp] = kMixGateXor;
+                values[kMixParamGateOut] = 17;
+                values[kMixParamGateOutMode] = 0;
+                for (int frame = 0; frame < 4; ++frame) {
+                    busFrames[(14 - 1) * 4 + frame] = 5.0f;
+                    busFrames[(17 - 1) * 4 + frame] = 1.0f;
+                }
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame) {
+                    CHECK(busFrames[(14 - 1) * 4 + frame] == 5.0f, "gate input bus is untouched in Add mode");
+                    CHECK(busFrames[(17 - 1) * 4 + frame] == 6.0f, "XOR gate adds onto the output bus");
+                }
+
+                // --- Velocity stage ---
+                CHECK(values[kMixParamVelIn] == 16, "Seq Mix reads the default sequencer velocity bus");
+                CHECK(values[kMixParamVelOut] == 16, "Seq Mix writes velocity back to the same bus");
+                CHECK(values[kMixParamVelOutMode] == 1, "velocity defaults to Replace");
+                CHECK(values[kMixParamVelMode] == kMixVelSum, "velocity defaults to Sum");
+                CHECK(values[kMixParamVelScale] == 100, "velocity scale defaults to 100%");
+                values[kMixParamGateOut] = 0;  // gate stage off; velocity must still run
+                values[kMixParamVelMode] = kMixVelAverage;
+                for (int frame = 0; frame < 4; ++frame)
+                    busFrames[(16 - 1) * 4 + frame] = 6.0f;
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame)
+                    CHECK(busFrames[(16 - 1) * 4 + frame] == 3.0f, "average velocity halves a two-source sum");
+
+                values[kMixParamVelMode] = kMixVelScale;
+                values[kMixParamVelScale] = 50;
+                for (int frame = 0; frame < 4; ++frame)
+                    busFrames[(16 - 1) * 4 + frame] = 6.0f;
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame)
+                    CHECK(busFrames[(16 - 1) * 4 + frame] == 3.0f, "scale mode applies the percent to the velocity sum");
+
+                // --- Pitch and velocity sample and hold, triggered by the mixed gate ---
+                CHECK(values[kMixParamSampleHold] == 0, "S&H defaults to Off");
+                values[kMixParamSampleHold] = 1;
+                values[kMixParamPitchOut] = 15;
+                values[kMixParamPitchOutMode] = 1;
+                values[kMixParamMode] = kMixSum;
+                values[kMixParamGateOut] = 14;
+                values[kMixParamGateOutMode] = 1;
+                values[kMixParamGateOp] = kMixGateOr;
+                values[kMixParamVelOut] = 16;
+                values[kMixParamVelOutMode] = 1;
+                values[kMixParamVelMode] = kMixVelSum;
+                // Prime known outputs with S&H off and the gate low.
+                values[kMixParamSampleHold] = 0;
+                for (int frame = 0; frame < 4; ++frame) {
+                    busFrames[(15 - 1) * 4 + frame] = 1.0f;
+                    busFrames[(16 - 1) * 4 + frame] = 2.0f;
+                    busFrames[(14 - 1) * 4 + frame] = 0.0f;
+                }
+                factory->step(algorithm, busFrames, 1);
+                values[kMixParamSampleHold] = 1;
+                // Gate low: pitch and velocity busses change but the held outputs stay put.
+                for (int frame = 0; frame < 4; ++frame) {
+                    busFrames[(15 - 1) * 4 + frame] = 2.0f;
+                    busFrames[(16 - 1) * 4 + frame] = 4.0f;
+                    busFrames[(14 - 1) * 4 + frame] = 0.0f;
+                }
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame) {
+                    CHECK(busFrames[(15 - 1) * 4 + frame] == 1.0f, "S&H holds pitch until a gate arrives");
+                    CHECK(busFrames[(16 - 1) * 4 + frame] == 2.0f, "S&H holds velocity until a gate arrives");
+                }
+                // Gate rises on frame 2: frames 0-1 hold, frames 2-3 carry the sample.
+                for (int frame = 0; frame < 4; ++frame) {
+                    busFrames[(15 - 1) * 4 + frame] = 2.0f;
+                    busFrames[(16 - 1) * 4 + frame] = 4.0f;
+                    busFrames[(14 - 1) * 4 + frame] = frame >= 2 ? 5.0f : 0.0f;
+                }
+                factory->step(algorithm, busFrames, 1);
+                CHECK(busFrames[(15 - 1) * 4 + 1] == 1.0f, "S&H still holds before the edge");
+                CHECK(busFrames[(15 - 1) * 4 + 2] == 2.0f, "S&H samples pitch on the gate's rising edge");
+                CHECK(busFrames[(16 - 1) * 4 + 2] == 4.0f, "S&H samples velocity on the gate's rising edge");
+                CHECK(busFrames[(15 - 1) * 4 + 3] == 2.0f, "S&H keeps the sample while the gate is high");
+                // Gate stays high and the inputs move: no new sample.
+                for (int frame = 0; frame < 4; ++frame) {
+                    busFrames[(15 - 1) * 4 + frame] = 3.0f;
+                    busFrames[(16 - 1) * 4 + frame] = 1.0f;
+                    busFrames[(14 - 1) * 4 + frame] = 5.0f;
+                }
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame) {
+                    CHECK(busFrames[(15 - 1) * 4 + frame] == 2.0f, "S&H ignores pitch changes without a new edge");
+                    CHECK(busFrames[(16 - 1) * 4 + frame] == 4.0f, "S&H ignores velocity changes without a new edge");
+                }
+                // With no gate input, S&H is bypassed and pitch tracks again.
+                values[kMixParamGateIn] = 0;
+                for (int frame = 0; frame < 4; ++frame)
+                    busFrames[(15 - 1) * 4 + frame] = 3.0f;
+                factory->step(algorithm, busFrames, 1);
+                for (int frame = 0; frame < 4; ++frame)
+                    CHECK(busFrames[(15 - 1) * 4 + frame] == 3.0f, "S&H is bypassed when Gate In is None");
+                values[kMixParamGateIn] = 14;
+                values[kMixParamSampleHold] = 0;
+
+                // Pages cover every parameter exactly once.
+                {
+                    int seen[kNumMixParams] = {};
+                    const _NT_parameterPages* pages = algorithm->parameterPages;
+                    CHECK(pages != nullptr && pages->numPages == 3, "Seq Mix has Pitch, Gate, and Velocity pages");
+                    for (uint32_t pg = 0; pages && pg < pages->numPages; ++pg)
+                        for (uint32_t i = 0; i < pages->pages[pg].numParams; ++i)
+                            seen[pages->pages[pg].params[i]]++;
+                    bool once = true;
+                    for (int i = 0; i < kNumMixParams; ++i)
+                        once = once && seen[i] == 1;
+                    CHECK(once, "every Seq Mix parameter appears on exactly one page");
+                }
             }
             delete[] sram;
         }

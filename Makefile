@@ -28,6 +28,7 @@ SOURCES = \
 	engines/FerromagneticEngine.cpp \
 	engines/QuantumEngine.cpp \
 	mix/MixQuantizer.cpp \
+	mix/BusMixers.cpp \
 	mix/nt_seq_mix.cpp
 
 # Include paths
@@ -149,6 +150,7 @@ UNIT_TESTS = \
 	$(BUILD_DIR)/test_ferro_engine \
 	$(BUILD_DIR)/test_quantum_engine \
 	$(BUILD_DIR)/test_mix_quantizer \
+	$(BUILD_DIR)/test_bus_mixers \
 	$(BUILD_DIR)/test_factories
 
 unit-test: $(UNIT_TESTS)
@@ -177,6 +179,9 @@ $(BUILD_DIR)/test_ferro_engine: tests/test_ferro_engine.cpp tests/nt_stubs.h eng
 
 $(BUILD_DIR)/test_quantum_engine: tests/test_quantum_engine.cpp tests/nt_stubs.h engines/QuantumEngine.cpp engines/QuantumEngine.h engines/SequencerEngine.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_quantum_engine.cpp -lm -o $@
+
+$(BUILD_DIR)/test_bus_mixers: tests/test_bus_mixers.cpp mix/BusMixers.cpp mix/BusMixers.h | $(BUILD_DIR)
+	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_bus_mixers.cpp mix/BusMixers.cpp -lm -o $@
 
 $(BUILD_DIR)/test_mix_quantizer: tests/test_mix_quantizer.cpp mix/MixQuantizer.cpp mix/MixQuantizer.h scale/ScaleQuantizer.cpp scale/ScaleQuantizer.h | $(BUILD_DIR)
 	$(CXX_TEST) $(CXXFLAGS_UNIT) -I. -I$(DISTINGNT_API)/include tests/test_mix_quantizer.cpp mix/MixQuantizer.cpp scale/ScaleQuantizer.cpp -lm -o $@
