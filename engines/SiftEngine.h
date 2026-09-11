@@ -11,8 +11,6 @@ public:
     EngineOutput clockTick(const ScaleQuantizer* scale) override;
     void reset() override;
     void parameterChanged(int localIndex, int16_t value) override;
-    int getParameterDefs(_NT_parameter* defs) const override;
-    const char* name() const override { return "Seq Sift"; }
     void getFocusDetail(FocusDetail& detail) const override;
     void getFocusBarInfo(FocusBarInfo& info) const override;
     int currentStep() const override;
@@ -46,9 +44,10 @@ public:
         kNumPolarities
     };
 
-private:
     static constexpr int kNumSequences = 20;
     static constexpr int kMaxSteps = 32;
+
+private:
 
     // Parameters
     int cvSeq_;       // 0-7

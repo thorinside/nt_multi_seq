@@ -9,8 +9,35 @@ static inline int clampInt(int v, int lo, int hi)
     return v;
 }
 
+static const char* const contourStrings[] = {
+    "Arch", "Descend", "Ascend", "Wave", nullptr
+};
+
+static const char* const mTransformStrings[] = {
+    "Transpose", "Invert", "Rotate", "Permute", nullptr
+};
+
+static const char* const lActionStrings[] = {
+    "New Motif", "Oct Shift", "Expand", "Reverse", nullptr
+};
+
+static const _NT_parameter kQuantumParams[] = {
+    /* kQMotifLen */ { .name = "Motif Len",  .min = 4,  .max = 16,  .def = 8,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kQGateDensity */ { .name = "Gate Dens",  .min = 25, .max = 100, .def = 75, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kQRange */ { .name = "Range",      .min = 2,  .max = 12,  .def = 5,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kQContour */ { .name = "Contour",    .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = contourStrings },
+    /* kQMEvery */ { .name = "M Every",    .min = 1,  .max = 8,   .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kQMTransform */ { .name = "M Action",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = mTransformStrings },
+    /* kQLEvery */ { .name = "L Every",    .min = 2,  .max = 16,  .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kQLAction */ { .name = "L Action",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = lActionStrings },
+    /* kQGateLen */ { .name = "Gate Len",   .min = 10, .max = 100, .def = 75, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kQVelocity */ { .name = "Velocity",   .min = 0,  .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+};
+static_assert(ARRAY_SIZE(kQuantumParams) == QuantumEngine::kNumQuantumParams, "Quantum param table size mismatch");
+
 QuantumEngine::QuantumEngine()
-    : motifLen_(8)
+    : SequencerEngine("Seq Quantum", kQuantumParams, kNumQuantumParams)
+    , motifLen_(8)
     , gateDensity_(75)
     , range_(5)
     , contour_(kContourArch)
@@ -382,32 +409,6 @@ void QuantumEngine::parameterChanged(int localIndex, int16_t value)
     }
 }
 
-static const char* const contourStrings[] = {
-    "Arch", "Descend", "Ascend", "Wave", nullptr
-};
-
-static const char* const mTransformStrings[] = {
-    "Transpose", "Invert", "Rotate", "Permute", nullptr
-};
-
-static const char* const lActionStrings[] = {
-    "New Motif", "Oct Shift", "Expand", "Reverse", nullptr
-};
-
-int QuantumEngine::getParameterDefs(_NT_parameter* defs) const
-{
-    defs[kQMotifLen]     = { .name = "Motif Len",  .min = 4,  .max = 16,  .def = 8,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kQGateDensity]  = { .name = "Gate Dens",  .min = 25, .max = 100, .def = 75, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kQRange]        = { .name = "Range",      .min = 2,  .max = 12,  .def = 5,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kQContour]      = { .name = "Contour",    .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = contourStrings };
-    defs[kQMEvery]       = { .name = "M Every",    .min = 1,  .max = 8,   .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kQMTransform]   = { .name = "M Action",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = mTransformStrings };
-    defs[kQLEvery]       = { .name = "L Every",    .min = 2,  .max = 16,  .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kQLAction]      = { .name = "L Action",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = lActionStrings };
-    defs[kQGateLen]      = { .name = "Gate Len",   .min = 10, .max = 100, .def = 75, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kQVelocity]     = { .name = "Velocity",   .min = 0,  .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    return kNumQuantumParams;
-}
 
 // --- UI ---
 

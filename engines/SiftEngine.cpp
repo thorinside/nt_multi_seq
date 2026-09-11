@@ -12,8 +12,23 @@ static inline int clampInt(int v, int lo, int hi)
     return v;
 }
 
+static const _NT_parameter kSiftParams[] = {
+    /* kSiftCvSeq */ { .name = "CV Seq",    .min = 1,    .max = SiftEngine::kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kSiftGateSeq */ { .name = "Gate Seq",  .min = 1,    .max = SiftEngine::kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kSiftCvSteps */ { .name = "CV Steps",  .min = 1,    .max = SiftEngine::kMaxSteps,     .def = 8,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kSiftMinCv */ { .name = "Min CV",    .min = -100, .max = 100,           .def = -10,.unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr },
+    /* kSiftMaxCv */ { .name = "Max CV",    .min = -100, .max = 100,           .def = 10, .unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr },
+    /* kSiftPolarity */ { .name = "Polarity",  .min = 0,    .max = SiftEngine::kNumPolarities - 1, .def = SiftEngine::kPolarityBipolar, .unit = kNT_unitEnum, .scaling = kNT_scalingNone, .enumStrings = polarityStrings },
+    /* kSiftBitDepth */ { .name = "CV Bit Depth", .min = 2, .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kSiftGateSteps */ { .name = "Gate Steps", .min = 1,   .max = SiftEngine::kMaxSteps,     .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kSiftThreshold */ { .name = "Gate Threshold", .min = 1, .max = 100,         .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kSiftVelocity */ { .name = "Velocity",  .min = 0,    .max = 100,           .def = 100,.unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+};
+static_assert(ARRAY_SIZE(kSiftParams) == SiftEngine::kNumSiftParams, "Sift param table size mismatch");
+
 SiftEngine::SiftEngine()
-    : cvSeq_(0)
+    : SequencerEngine("Seq Sift", kSiftParams, kNumSiftParams)
+    , cvSeq_(0)
     , gateSeq_(0)
     , cvSteps_(8)
     , minCv_(-10)
@@ -195,20 +210,6 @@ void SiftEngine::parameterChanged(int localIndex, int16_t value)
     }
 }
 
-int SiftEngine::getParameterDefs(_NT_parameter* defs) const
-{
-    defs[kSiftCvSeq]     = { .name = "CV Seq",    .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kSiftGateSeq]   = { .name = "Gate Seq",  .min = 1,    .max = kNumSequences, .def = 1,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kSiftCvSteps]   = { .name = "CV Steps",  .min = 1,    .max = kMaxSteps,     .def = 8,  .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kSiftMinCv]     = { .name = "Min CV",    .min = -100, .max = 100,           .def = -10,.unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
-    defs[kSiftMaxCv]     = { .name = "Max CV",    .min = -100, .max = 100,           .def = 10, .unit = kNT_unitVolts,   .scaling = kNT_scaling10,   .enumStrings = nullptr };
-    defs[kSiftPolarity]  = { .name = "Polarity",  .min = 0,    .max = kNumPolarities - 1, .def = kPolarityBipolar, .unit = kNT_unitEnum, .scaling = kNT_scalingNone, .enumStrings = polarityStrings };
-    defs[kSiftBitDepth]  = { .name = "CV Bit Depth", .min = 2, .max = 16,            .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kSiftGateSteps] = { .name = "Gate Steps", .min = 1,   .max = kMaxSteps,     .def = 16, .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kSiftThreshold] = { .name = "Gate Threshold", .min = 1, .max = 100,         .def = 50, .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kSiftVelocity]  = { .name = "Velocity",  .min = 0,    .max = 100,           .def = 100,.unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    return kNumSiftParams;
-}
 
 int SiftEngine::currentStep() const { return voltSeqs_[cvSeq_].currentStep; }
 int SiftEngine::sequenceLength() const { return cvSteps_; }

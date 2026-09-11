@@ -11,8 +11,6 @@ public:
     EngineOutput clockTick(const ScaleQuantizer* scale) override;
     void reset() override;
     void parameterChanged(int localIndex, int16_t value) override;
-    int getParameterDefs(_NT_parameter* defs) const override;
-    const char* name() const override { return "Seq Markov"; }
     bool usesTimedGate() const override { return true; }
     int gateLengthPercent() const override { return 99; }
     void getFocusDetail(FocusDetail& detail) const override;
@@ -47,8 +45,9 @@ public:
         kNumStyles
     };
 
-private:
     static constexpr int kMaxSteps = 64;
+
+private:
     static constexpr int kMaxDegrees = 128;
     static constexpr int kMatrixDeg = 7;
     static constexpr int kRhythmPatternLen = 16;

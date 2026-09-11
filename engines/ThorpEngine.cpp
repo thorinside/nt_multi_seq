@@ -91,8 +91,28 @@ static inline int clampInt(int v, int lo, int hi)
 
 // --- Implementation ---
 
+static const _NT_parameter kThorpParams[] = {
+    /* kThorpPattern */ { .name = "Pattern",    .min = 0, .max = ThorpEngine::kNumPatterns - 1,    .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPatternStrings },
+    /* kThorpVelPattern */ { .name = "Vel Pat",    .min = 0, .max = ThorpEngine::kNumVelPatterns - 1, .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kVelPatternStrings },
+    /* kThorpLength */ { .name = "Length",     .min = 1, .max = 32,                  .def = 8,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpOffset */ { .name = "Offset",     .min = 0, .max = 7,                   .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpReverse */ { .name = "Reverse",    .min = 0, .max = 1,                   .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kReverseStrings },
+    /* kThorpArpSlot */ { .name = "Arp Slot",   .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpGateProb */ { .name = "Gate Prob",  .min = 1, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpOctJump */ { .name = "Oct Jump",   .min = 0, .max = 100,                 .def = 0,        .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpOctRange */ { .name = "Oct Range",  .min = 1, .max = 3,                   .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpSequenceMode */ { .name = "Seq Mode",   .min = 0, .max = ThorpEngine::kNumSequenceModes - 1, .def = ThorpEngine::kModeSeq, .unit = kNT_unitEnum,  .scaling = kNT_scalingNone, .enumStrings = kSequenceModeStrings },
+    /* kThorpGlobalVelocity */ { .name = "Global Vel", .min = 0, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpGateLen */ { .name = "Gate Len",   .min = 1, .max = 100,                 .def = 50,       .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpPlayMode */ { .name = "Play Mode",  .min = 0, .max = ThorpEngine::kNumPlayModes - 1,   .def = ThorpEngine::kPlayJam, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPlayModeStrings },
+    /* kThorpChainLen */ { .name = "Chain Len",  .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kThorpMidiInCh */ { .name = "MIDI In Ch", .min = 0, .max = 16,                  .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },  // 0=Omni, 1-16=channel
+};
+static_assert(ARRAY_SIZE(kThorpParams) == ThorpEngine::kNumThorpParams, "Thorp param table size mismatch");
+
 ThorpEngine::ThorpEngine()
-    : pattern_(0)
+    : SequencerEngine("Seq Thorp", kThorpParams, kNumThorpParams)
+    , pattern_(0)
     , velPattern_(0)
     , length_(8)
     , offset_(0)
@@ -576,25 +596,6 @@ void ThorpEngine::getLoadedSlotParams(int16_t& pattern, int16_t& velPattern,
     reverse = (int16_t)reverse_;
 }
 
-int ThorpEngine::getParameterDefs(_NT_parameter* defs) const
-{
-    defs[kThorpPattern]        = { .name = "Pattern",    .min = 0, .max = kNumPatterns - 1,    .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPatternStrings };
-    defs[kThorpVelPattern]     = { .name = "Vel Pat",    .min = 0, .max = kNumVelPatterns - 1, .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kVelPatternStrings };
-    defs[kThorpLength]         = { .name = "Length",     .min = 1, .max = 32,                  .def = 8,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpOffset]         = { .name = "Offset",     .min = 0, .max = 7,                   .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpReverse]        = { .name = "Reverse",    .min = 0, .max = 1,                   .def = 0,        .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kReverseStrings };
-    defs[kThorpArpSlot]        = { .name = "Arp Slot",   .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpGateProb]       = { .name = "Gate Prob",  .min = 1, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpOctJump]        = { .name = "Oct Jump",   .min = 0, .max = 100,                 .def = 0,        .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpOctRange]       = { .name = "Oct Range",  .min = 1, .max = 3,                   .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpSequenceMode]   = { .name = "Seq Mode",   .min = 0, .max = kNumSequenceModes - 1, .def = kModeSeq, .unit = kNT_unitEnum,  .scaling = kNT_scalingNone, .enumStrings = kSequenceModeStrings };
-    defs[kThorpGlobalVelocity] = { .name = "Global Vel", .min = 0, .max = 100,                 .def = 100,      .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpGateLen]        = { .name = "Gate Len",   .min = 1, .max = 100,                 .def = 50,       .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpPlayMode]       = { .name = "Play Mode",  .min = 0, .max = kNumPlayModes - 1,   .def = kPlayJam, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = kPlayModeStrings };
-    defs[kThorpChainLen]       = { .name = "Chain Len",  .min = 1, .max = 16,                  .def = 1,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kThorpMidiInCh]       = { .name = "MIDI In Ch", .min = 0, .max = 16,                  .def = 0,        .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr }; // 0=Omni, 1-16=channel
-    return kNumThorpParams;
-}
 
 int ThorpEngine::currentStep() const
 {

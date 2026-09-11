@@ -12,8 +12,6 @@ public:
     EngineOutput clockTick(const ScaleQuantizer* scale) override;
     void reset() override;
     void parameterChanged(int localIndex, int16_t value) override;
-    int getParameterDefs(_NT_parameter* defs) const override;
-    const char* name() const override { return "Seq Soma"; }
     void getFocusDetail(FocusDetail& detail) const override;
     int currentStep() const override;
     int sequenceLength() const override;

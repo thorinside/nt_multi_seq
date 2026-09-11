@@ -8,8 +8,18 @@ static inline int clampInt(int v, int lo, int hi)
     return v;
 }
 
+static const _NT_parameter kSomaParams[] = {
+    /* kSomaOctaveSpread */ { .name = "Oct Spread", .min = 0, .max = 100, .def = 50, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kSomaNoteMutate */ { .name = "Note Mutate", .min = 0, .max = 100, .def = 70, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kSomaGateMutate */ { .name = "Gate Mutate", .min = 0, .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kSomaLength */ { .name = "Length", .min = 1, .max = 64, .def = 8, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr },
+    /* kSomaVelocity */ { .name = "Velocity", .min = 0, .max = 100, .def = 100, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+};
+static_assert(ARRAY_SIZE(kSomaParams) == SomaEngine::kNumSomaParams, "Soma param table size mismatch");
+
 SomaEngine::SomaEngine()
-    : octaveSpread_(50)
+    : SequencerEngine("Seq Soma", kSomaParams, kNumSomaParams)
+    , octaveSpread_(50)
     , noteMutate_(70)
     , gateMutate_(80)
     , length_(8)
@@ -178,15 +188,6 @@ void SomaEngine::parameterChanged(int localIndex, int16_t value)
     }
 }
 
-int SomaEngine::getParameterDefs(_NT_parameter* defs) const
-{
-    defs[kSomaOctaveSpread] = { .name = "Oct Spread", .min = 0, .max = 100, .def = 50, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kSomaNoteMutate]   = { .name = "Note Mutate", .min = 0, .max = 100, .def = 70, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kSomaGateMutate]   = { .name = "Gate Mutate", .min = 0, .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kSomaLength]       = { .name = "Length", .min = 1, .max = 64, .def = 8, .unit = kNT_unitNone, .scaling = 0, .enumStrings = nullptr };
-    defs[kSomaVelocity]     = { .name = "Velocity", .min = 0, .max = 100, .def = 100, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    return kNumSomaParams;
-}
 
 int SomaEngine::currentStep() const { return currentStep_; }
 int SomaEngine::sequenceLength() const { return length_; }

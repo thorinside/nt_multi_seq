@@ -120,8 +120,21 @@ const uint8_t SeqMarkovEngine::kRhythmPatterns[kNumRhythmPatterns][kRhythmPatter
 // Construction / init
 // -----------------------------------------------------------------------
 
+static const _NT_parameter kMarkovParams[] = {
+    /* kMarkovStyle */ { .name = "Style",     .min = 0, .max = SeqMarkovEngine::kNumStyles - 1, .def = SeqMarkovEngine::kStylePopRock, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = styleStrings },
+    /* kMarkovEmotion */ { .name = "Emotion",   .min = 0, .max = 100,            .def = 50,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kMarkovJumpiness */ { .name = "Jumpiness", .min = 0, .max = 100,            .def = 30,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kMarkovRange */ { .name = "Oct Range", .min = 1, .max = 3,              .def = 2,             .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kMarkovMutation */ { .name = "Mutation",  .min = 0, .max = 100,            .def = 20,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kMarkovLength */ { .name = "Length",    .min = 1, .max = SeqMarkovEngine::kMaxSteps,      .def = 8,             .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr },
+    /* kMarkovRandomizeSwitch */ { .name = "Randomize", .min = 0, .max = 1,        .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = offOnStrings },
+    /* kMarkovRegenerateSwitch */ { .name = "Regenerate", .min = 0, .max = 1,      .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = offOnStrings },
+};
+static_assert(ARRAY_SIZE(kMarkovParams) == SeqMarkovEngine::kNumMarkovParams, "Markov param table size mismatch");
+
 SeqMarkovEngine::SeqMarkovEngine()
-    : style_(kStylePopRock)
+    : SequencerEngine("Seq Markov", kMarkovParams, kNumMarkovParams)
+    , style_(kStylePopRock)
     , emotion_(50)
     , jumpiness_(30)
     , range_(2)
@@ -528,18 +541,6 @@ void SeqMarkovEngine::parameterChanged(int localIndex, int16_t value)
     }
 }
 
-int SeqMarkovEngine::getParameterDefs(_NT_parameter* defs) const
-{
-    defs[kMarkovStyle]     = { .name = "Style",     .min = 0, .max = kNumStyles - 1, .def = kStylePopRock, .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = styleStrings };
-    defs[kMarkovEmotion]   = { .name = "Emotion",   .min = 0, .max = 100,            .def = 50,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kMarkovJumpiness] = { .name = "Jumpiness", .min = 0, .max = 100,            .def = 30,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kMarkovRange]     = { .name = "Oct Range", .min = 1, .max = 3,              .def = 2,             .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kMarkovMutation]  = { .name = "Mutation",  .min = 0, .max = 100,            .def = 20,            .unit = kNT_unitPercent, .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kMarkovLength]    = { .name = "Length",    .min = 1, .max = kMaxSteps,      .def = 8,             .unit = kNT_unitNone,    .scaling = kNT_scalingNone, .enumStrings = nullptr };
-    defs[kMarkovRandomizeSwitch] = { .name = "Randomize", .min = 0, .max = 1,        .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = offOnStrings };
-    defs[kMarkovRegenerateSwitch] = { .name = "Regenerate", .min = 0, .max = 1,      .def = 0,             .unit = kNT_unitEnum,    .scaling = kNT_scalingNone, .enumStrings = offOnStrings };
-    return kNumMarkovParams;
-}
 
 // -----------------------------------------------------------------------
 // Display / status

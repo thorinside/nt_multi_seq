@@ -50,17 +50,24 @@ int fmtInt(char* buf, int32_t val);
 
 class SequencerEngine {
 public:
-    SequencerEngine() : weightMode_(0) {}
-    virtual ~SequencerEngine() {}
+    // Engines are placement-newed into host memory and never deleted, so the
+    // base needs no virtual destructor (which would also pull in operator delete).
+    SequencerEngine(const char* name, const _NT_parameter* params, int numParams)
+        : weightMode_(0), name_(name), params_(params), numParams_(numParams) {}
     virtual void init(uint32_t sampleRate) = 0;
     virtual EngineOutput clockTick(const ScaleQuantizer* scale) = 0;
     virtual void reset() = 0;
     virtual void parameterChanged(int localIndex, int16_t value) = 0;
 
-    // Return the number of engine-specific parameters, filling defs[]
-    virtual int getParameterDefs(_NT_parameter* defs) const = 0;
+    // Engine-specific parameter definitions live in a static const table
+    // supplied by the engine constructor; copy them into the host array.
+    int getParameterDefs(_NT_parameter* defs) const {
+        for (int i = 0; i < numParams_; ++i)
+            defs[i] = params_[i];
+        return numParams_;
+    }
 
-    virtual const char* name() const = 0;
+    const char* name() const { return name_; }
 
     // Focus view: fill data structs for rendering by the host.
     virtual void getFocusDetail(FocusDetail& detail) const {
@@ -107,6 +114,11 @@ public:
 
 protected:
     int weightMode_;
+
+private:
+    const char* name_;
+    const _NT_parameter* params_;
+    int numParams_;
 };
 
 #endif // SEQUENCER_ENGINE_H

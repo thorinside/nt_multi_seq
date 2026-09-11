@@ -24,8 +24,24 @@ static const int8_t kVoicingIntervals[5][8] = {
     { 0, 0, 0, 0, 0, 0, 0, 0 },       // Unison
 };
 
+static const _NT_parameter kFerroParams[] = {
+    /* kFerroRole */ { .name = "Role",         .min = 0,  .max = 2,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = roleStrings },
+    /* kFerroLoopSteps */ { .name = "Loop Steps",   .min = 2,  .max = 128, .def = 16, .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kFerroMaxLayers */ { .name = "Max Layers",   .min = 1,  .max = 8,   .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kFerroHarmonyMode */ { .name = "Harmony",      .min = 0,  .max = 1,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = harmonyModeStrings },
+    /* kFerroVoicing */ { .name = "Voicing",      .min = 0,  .max = 4,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = voicingStrings },
+    /* kFerroCompletion */ { .name = "Completion",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = completionStrings },
+    /* kFerroNoteDensity */ { .name = "Note Density", .min = 0,  .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kFerroGateLength */ { .name = "Gate Length",  .min = 10, .max = 100, .def = 75, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kFerroVelocity */ { .name = "Velocity",     .min = 0,  .max = 100, .def = 100,.unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr },
+    /* kFerroOctSpread */ { .name = "Oct Spread",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+    /* kFerroRefreshRate */ { .name = "Refresh Rate", .min = 1,  .max = 8,   .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr },
+};
+static_assert(ARRAY_SIZE(kFerroParams) == FerromagneticEngine::kNumFerroParams, "Ferro param table size mismatch");
+
 FerromagneticEngine::FerromagneticEngine()
-    : role_(kRoleMelody)
+    : SequencerEngine("Seq Ferro", kFerroParams, kNumFerroParams)
+    , role_(kRoleMelody)
     , loopSteps_(16)
     , maxLayers_(4)
     , harmonyMode_(kHarmonyStructured)
@@ -423,21 +439,6 @@ void FerromagneticEngine::parameterChanged(int localIndex, int16_t value)
     }
 }
 
-int FerromagneticEngine::getParameterDefs(_NT_parameter* defs) const
-{
-    defs[kFerroRole]        = { .name = "Role",         .min = 0,  .max = 2,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = roleStrings };
-    defs[kFerroLoopSteps]   = { .name = "Loop Steps",   .min = 2,  .max = 128, .def = 16, .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kFerroMaxLayers]   = { .name = "Max Layers",   .min = 1,  .max = 8,   .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kFerroHarmonyMode] = { .name = "Harmony",      .min = 0,  .max = 1,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = harmonyModeStrings };
-    defs[kFerroVoicing]     = { .name = "Voicing",      .min = 0,  .max = 4,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = voicingStrings };
-    defs[kFerroCompletion]  = { .name = "Completion",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitEnum,    .scaling = 0, .enumStrings = completionStrings };
-    defs[kFerroNoteDensity] = { .name = "Note Density", .min = 0,  .max = 100, .def = 80, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kFerroGateLength]  = { .name = "Gate Length",  .min = 10, .max = 100, .def = 75, .unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kFerroVelocity]    = { .name = "Velocity",     .min = 0,  .max = 100, .def = 100,.unit = kNT_unitPercent, .scaling = 0, .enumStrings = nullptr };
-    defs[kFerroOctSpread]   = { .name = "Oct Spread",   .min = 0,  .max = 3,   .def = 0,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    defs[kFerroRefreshRate] = { .name = "Refresh Rate", .min = 1,  .max = 8,   .def = 4,  .unit = kNT_unitNone,    .scaling = 0, .enumStrings = nullptr };
-    return kNumFerroParams;
-}
 
 int FerromagneticEngine::currentStep() const { return currentTick_; }
 int FerromagneticEngine::sequenceLength() const { return loopSteps_; }
