@@ -12,6 +12,7 @@ public:
     // input:   V/oct voltage read from the shared bus (already summed by Add-mode writers)
     // mode:    kSum passes the sum through, kAverage divides by sources
     // sources: number of sequencers feeding the bus (>= 1)
+    // Input is clamped to +/-10 V before quantization.
     // scale:   nullptr to bypass quantization
     // root:    root note semitone offset (0-11)
     float process(float input, Mode mode, int sources, const ScaleQuantizer* scale, int root) const;

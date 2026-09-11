@@ -19,7 +19,7 @@ The single `nt_seq.o` binary exposes six independent algorithms. Each algorithm 
 
 | Algorithm | Description |
 |-----------|-------------|
-| Seq Mix | Sums or averages a pitch bus shared by several sequencers, then quantizes the result to a `.scl` scale |
+| [Seq Mix](docs/mix.md) | Sums or averages a pitch bus shared by several sequencers, then quantizes the result to a `.scl` scale |
 
 To combine sequencers, set each one to Add mode on the same Pitch Out bus with Scale On off, then place Seq Mix after them. Its Pitch In and Pitch Out both default to bus 15 in Replace mode, so the summed voltage is consumed in place. Choose `Sum` or `Average`, set `Sources` to the number of sequencers feeding the bus, and pick a Root Note and Scale File.
 

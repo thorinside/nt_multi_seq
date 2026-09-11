@@ -65,6 +65,12 @@ int main()
     ASSERT_NEAR(mix.process(-0.45f, MixQuantizer::kSum, 1, &major, 0), -5.0f / 12.0f, 1e-4,
         "negative pitch snaps to G below C");
 
+    // Extreme bus voltages must clamp to the Eurorack range and terminate.
+    ASSERT_NEAR(mix.process(-1000.0f, MixQuantizer::kSum, 1, &major, 0), -10.0f, 1e-4,
+        "far negative input clamps to -10 V");
+    ASSERT_NEAR(mix.process(1000.0f, MixQuantizer::kSum, 1, &major, 0), 10.0f, 1e-4,
+        "far positive input clamps to +10 V");
+
     printf("%d tests, %d failures\n", tests, failures);
     return failures > 0 ? 1 : 0;
 }
